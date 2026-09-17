@@ -33,7 +33,7 @@ Field rules:
  */
 export const pitchDeckAgent = new Agent({
   name: "PitchDeckGenerator",
-  model: "gpt-4.1-mini",
+  model: "gpt-4o-mini",
   instructions: PITCH_DECK_INSTRUCTIONS,
   // Zod v4 types differ slightly from the SDK — runtime structured output works fine.
   outputType: PitchDeckSchema as any,

@@ -48,7 +48,7 @@ const QualityCheckSchema = z.object({
  */
 const qualityCheckerAgent = new Agent({
   name: "PitchDeckQualityChecker",
-  model: "gpt-4.1-mini",
+  model: "gpt-4o-mini",
   instructions: `You review pitch deck JSON for a beginner learning app.
 
 Return isValid: false if ANY of these are true:

@@ -3,6 +3,7 @@ import express from "express";
 import { serve } from "inngest/express";
 import { inngest } from "./inngest/client.ts";
 import { generateDeck } from "./inngest/functions/index.ts";
+import { decksRouter } from "./routes/decks.ts";
 
 const functions = [generateDeck];
 
@@ -11,9 +12,21 @@ const app = express();
 app.use(express.json());
 
 app.use("/api/inngest", serve({ client: inngest, functions }));
+app.use("/api/decks", decksRouter);
 
 app.get("/health", (req, res) => {
   res.json({ status: "ok" });
+});
+
+// Unknown API routes and thrown errors return JSON, so the frontend can always show a message
+app.use("/api", (req, res) => {
+  res.status(404).json({ error: "Not found" });
+});
+
+app.use((err, req, res, next) => {
+  console.error(err);
+  const status = err.status ?? err.statusCode ?? 500;
+  res.status(status).json({ error: status === 500 ? "Something went wrong on the server" : err.message });
 });
 
 const PORT = process.env.PORT || 4000;

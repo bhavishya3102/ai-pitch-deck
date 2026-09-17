@@ -49,6 +49,11 @@ export const generateDeck = inngest.createFunction(
 
       // Step 3 — run the AI agent (guardrails + structured output)
       const pitchDeck = await step.run("run-agent", async () => {
+        // Config error — retrying can't fix a missing key, so fail right away
+        if (!process.env.OPENAI_API_KEY) {
+          throw new NonRetriableError("OPENAI_API_KEY is not set in backend/.env");
+        }
+
         try {
           return await generatePitchDeck(deck.idea);
         } catch (error) {
