@@ -1,8 +1,10 @@
 import "dotenv/config";
 import express from "express";
 import { serve } from "inngest/express";
-import { inngest } from "./inngest/client.js";
-import { functions } from "./inngest/functions.js";
+import { inngest } from "./inngest/client.ts";
+import { generateDeck } from "./inngest/functions/index.ts";
+
+const functions = [generateDeck];
 
 const app = express();
 

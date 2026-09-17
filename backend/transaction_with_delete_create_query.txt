@@ -1,0 +1,33 @@
+Inngest mein har step.run fail hone par dobara chalta hai (retry). Ab ye case sochiye:
+
+save-slide-3 chala aur prisma.slide.create ne DB mein slide 3 save kar di ✅
+Uske turant baad kuch fail ho gaya, jaise network timeout, server restart, ya Inngest tak step ka result nahi pahuncha ❌
+Inngest ko lagta hai step fail hua, to wo save-slide-3 dobara chalata hai
+create phir chalta hai, aur ab DB mein slide 3 do baar hai
+Deck kholne par frontend pe same slide do baar dikhegi.
+
+deleteMany kya karta hai
+Naya create karne se pehle ye us deck ki usi order wali purani slide hata deta hai:
+
+Pehli baar chala: delete karne ko kuch nahi hai, bas create hoga
+Retry mein chala: pehle wali slide 3 delete hogi, phir nayi banegi
+Isse step ko kitni bhi baar chalao, result hamesha ek hi slide 3 hoga. Isko idempotent kehte hain.
+
+$transaction kyon
+Delete aur create dono ek saath hone chahiye, ya dono nahi. Transaction ke bina delete ho jaye aur create fail ho jaye, to slide gayab ho jayegi. Transaction mein create fail hua to delete bhi rollback ho jata hai.
+
+Isse bhi saaf tareeka
+Schema mein unique constraint lagao aur upsert use karo:
+
+
+model Slide {
+  // ...
+  @@unique([deckId, order])
+}
+
+await prisma.slide.upsert({
+  where: { deckId_order: { deckId, order } },
+  create: { deckId, order, title: slide.title, content: slide.content, imagePrompt: slide.imagePrompt, imageUrl },
+  update: { title: slide.title, content: slide.content, imagePrompt: slide.imagePrompt, imageUrl },
+});
+Isme DB khud duplicate nahi banne deta. Bas iske liye nayi migration chalani padegi, isliye maine abhi ye nahi kiya.
