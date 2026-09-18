@@ -20,7 +20,6 @@ export default function App() {
         <button type="button" className="wordmark" onClick={() => selectDeck(null)}>
           Pitch<em>Press</em>
         </button>
-        <span className="mono muted masthead-stack">express · inngest · openai agents · imagekit · postgres</span>
       </header>
 
       <aside className="sidebar">

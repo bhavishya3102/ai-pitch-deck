@@ -39,10 +39,15 @@ function Thumbnail({ slide }: { slide: Slide }) {
 type Props = {
   slides: Slide[];
   generating: boolean;
+  index: number;
+  onIndexChange: (index: number) => void;
+  /** Off while presenting, so the two views don't fight over the arrow keys */
+  keyboardEnabled: boolean;
+  onPresent: () => void;
 };
 
-export function SlideViewer({ slides, generating }: Props) {
-  const [index, setIndex] = useState(0);
+export function SlideViewer({ slides, generating, index, onIndexChange, keyboardEnabled, onPresent }: Props) {
+  const setIndex = onIndexChange;
   const count = slides.length;
   // Clamp: a re-run can shrink the slide list below the stored index
   const position = Math.max(0, Math.min(index, count - 1));
@@ -50,14 +55,16 @@ export function SlideViewer({ slides, generating }: Props) {
 
   // Arrow keys flip slides (ignored while typing in the composer)
   useEffect(() => {
+    if (!keyboardEnabled) return;
+
     function onKey(event: KeyboardEvent) {
       if (event.target instanceof HTMLTextAreaElement || count === 0) return;
-      if (event.key === "ArrowRight") setIndex((i) => Math.min(Math.min(i, count - 1) + 1, count - 1));
-      if (event.key === "ArrowLeft") setIndex((i) => Math.max(Math.min(i, count - 1) - 1, 0));
+      if (event.key === "ArrowRight") setIndex(Math.min(position + 1, count - 1));
+      if (event.key === "ArrowLeft") setIndex(Math.max(position - 1, 0));
     }
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [count]);
+  }, [count, keyboardEnabled, position, setIndex]);
 
   if (!current) {
     return (
@@ -132,6 +139,11 @@ export function SlideViewer({ slides, generating }: Props) {
           aria-label="Next slide"
         >
           →
+        </button>
+
+        <button type="button" className="button-primary present-start" onClick={onPresent}>
+          Present
+          <span aria-hidden>▶</span>
         </button>
       </div>
     </div>

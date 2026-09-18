@@ -1,10 +1,14 @@
+import { useState } from "react";
+
 import { ApiError, useDeck } from "../lib/api.ts";
 import { duration } from "../lib/format.ts";
+import { requestFullscreen } from "../lib/fullscreen.ts";
 import { useNow } from "../lib/hooks.ts";
 import { buildPipeline } from "../lib/pipeline.ts";
 import { isFinished } from "../lib/types.ts";
 import { DeleteDeckButton } from "./DeleteDeckButton.tsx";
 import { Pipeline } from "./Pipeline.tsx";
+import { PresentMode } from "./PresentMode.tsx";
 import { SlideViewer } from "./SlideViewer.tsx";
 import { StatusBadge } from "./StatusBadge.tsx";
 
@@ -17,6 +21,9 @@ export function DeckView({ deckId, onDeleted }: Props) {
   const { data: deck, isPending, isError, error, refetch } = useDeck(deckId);
   const running = deck ? !isFinished(deck.status) : false;
   const now = useNow(running);
+  // Index lives here so "Present" starts on the slide you are looking at
+  const [slideIndex, setSlideIndex] = useState(0);
+  const [presenting, setPresenting] = useState(false);
 
   if (isPending) {
     return <div className="deck-view loading mono muted">Loading deck…</div>;
@@ -70,9 +77,32 @@ export function DeckView({ deckId, onDeleted }: Props) {
           <Pipeline stages={buildPipeline(deck)} />
         </aside>
         <section className="deck-slides" aria-label="Slides">
-          <SlideViewer slides={deck.slides} generating={running} />
+          <SlideViewer
+            slides={deck.slides}
+            generating={running}
+            index={slideIndex}
+            onIndexChange={setSlideIndex}
+            keyboardEnabled={!presenting}
+            onPresent={() => {
+              // Inside the click handler so the browser allows fullscreen
+              requestFullscreen();
+              setPresenting(true);
+            }}
+          />
         </section>
       </div>
+
+      {presenting && deck.slides.length > 0 && (
+        <PresentMode
+          slides={deck.slides}
+          startIndex={slideIndex}
+          deckTitle={deck.title ?? "Pitch deck"}
+          onExit={(lastIndex) => {
+            setSlideIndex(lastIndex);
+            setPresenting(false);
+          }}
+        />
+      )}
     </div>
   );
 }
