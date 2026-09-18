@@ -69,6 +69,37 @@ export function useDeck(id: string | null) {
   });
 }
 
+/** Stops generation (if running) and deletes the deck. Removes it from the list right away. */
+// onDeleted is a hook-level callback on purpose: the optimistic update unmounts the list
+// item, and callbacks passed to mutate() don't fire after the component unmounts.
+export function useDeleteDeck(onDeleted: (id: string) => void) {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: (id: string) => request<null>(`/api/decks/${id}`, { method: "DELETE" }),
+    onMutate: async (id) => {
+      await queryClient.cancelQueries({ queryKey: deckKeys.all });
+      const previous = queryClient.getQueryData<DeckListItem[]>(deckKeys.all);
+      queryClient.setQueryData<DeckListItem[]>(deckKeys.all, (decks) => decks?.filter((deck) => deck.id !== id));
+      return { previous };
+    },
+    onError: (error, id, context) => {
+      // Already gone on the server counts as deleted; anything else — put the deck back
+      if (error instanceof ApiError && error.status === 404) {
+        queryClient.removeQueries({ queryKey: deckKeys.detail(id) });
+        onDeleted(id);
+        return;
+      }
+      queryClient.setQueryData(deckKeys.all, context?.previous);
+    },
+    onSuccess: (_data, id) => {
+      queryClient.removeQueries({ queryKey: deckKeys.detail(id) });
+      onDeleted(id);
+    },
+    onSettled: () => queryClient.invalidateQueries({ queryKey: deckKeys.all }),
+  });
+}
+
 export function useCreateDeck() {
   const queryClient = useQueryClient();
 

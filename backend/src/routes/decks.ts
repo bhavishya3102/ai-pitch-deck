@@ -51,6 +51,34 @@ decksRouter.get("/", async (_req, res) => {
   res.json(items);
 });
 
+/** Stop a running generation (if any) and delete the deck + its slides. */
+decksRouter.delete("/:id", async (req, res) => {
+  const deck = await prisma.deck.findUnique({
+    where: { id: req.params.id },
+    select: { id: true, status: true },
+  });
+
+  if (!deck) {
+    res.status(404).json({ error: "Deck not found" });
+    return;
+  }
+
+  if (deck.status === "PENDING" || deck.status === "GENERATING") {
+    try {
+      await inngest.send({ name: "deck/cancel", data: { deckId: deck.id } });
+    } catch (error) {
+      // Still delete: if Inngest is down the run can't progress, and the function
+      // itself stops before generating images for a deck that no longer exists
+      console.warn(`Could not send deck/cancel for ${deck.id}:`, error);
+    }
+  }
+
+  // Slides are removed by the onDelete: Cascade relation
+  await prisma.deck.deleteMany({ where: { id: deck.id } });
+
+  res.status(204).end();
+});
+
 /** One deck with its slides — the UI polls this while the flow runs. */
 decksRouter.get("/:id", async (req, res) => {
   const deck = await prisma.deck.findUnique({

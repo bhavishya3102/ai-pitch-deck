@@ -1,13 +1,16 @@
 import { useDecks } from "../lib/api.ts";
 import { timeAgo } from "../lib/format.ts";
+import { isFinished } from "../lib/types.ts";
+import { DeleteDeckButton } from "./DeleteDeckButton.tsx";
 import { StatusBadge } from "./StatusBadge.tsx";
 
 type Props = {
   selectedId: string | null;
   onSelect: (id: string) => void;
+  onDeleted: (id: string) => void;
 };
 
-export function DeckList({ selectedId, onSelect }: Props) {
+export function DeckList({ selectedId, onSelect, onDeleted }: Props) {
   const { data: decks, isPending, isError, error } = useDecks();
 
   return (
@@ -31,7 +34,7 @@ export function DeckList({ selectedId, onSelect }: Props) {
       {decks && decks.length > 0 && (
         <ul className="deck-items">
           {decks.map((deck) => (
-            <li key={deck.id}>
+            <li key={deck.id} className="deck-row">
               <button
                 type="button"
                 className="deck-item"
@@ -46,6 +49,15 @@ export function DeckList({ selectedId, onSelect }: Props) {
                   </span>
                 </span>
               </button>
+              {/* Sibling of the select button — a button can't contain another button */}
+              <div className="deck-row-actions">
+                <DeleteDeckButton
+                  deckId={deck.id}
+                  running={!isFinished(deck.status)}
+                  onDeleted={onDeleted}
+                  variant="icon"
+                />
+              </div>
             </li>
           ))}
         </ul>

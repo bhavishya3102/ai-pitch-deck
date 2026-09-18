@@ -20,6 +20,8 @@ export const generateDeck = inngest.createFunction(
   {
     id: "generate-deck",
     triggers: [{ event: "deck/generate" }],
+    // Deleting a deck sends "deck/cancel" — stop this run before its next step
+    cancelOn: [{ event: "deck/cancel", match: "data.deckId" }],
   },
   async ({ event, step }) => {
     const { deckId } = event.data;
@@ -79,6 +81,12 @@ export const generateDeck = inngest.createFunction(
         const order = index + 1;
 
         const imageUrl = await step.run(`image-${order}`, async () => {
+          // Safety net if the cancel event was missed: don't pay for images of a deleted deck
+          const exists = await prisma.deck.count({ where: { id: deckId } });
+          if (!exists) {
+            throw new NonRetriableError(`Deck was deleted: ${deckId}`);
+          }
+
           const imageBuffer = await generateSlideImage(slide.imagePrompt);
           const fileName = `deck-${deckId}-slide-${order}.png`;
           return uploadSlideImage(imageBuffer, fileName);
@@ -119,7 +127,8 @@ export const generateDeck = inngest.createFunction(
           : "Unknown error during deck generation";
 
       await step.run("mark-failed", async () => {
-        await prisma.deck.update({
+        // updateMany: no error if the deck was deleted meanwhile
+        await prisma.deck.updateMany({
           where: { id: deckId },
           data: {
             status: DeckStatus.FAILED,

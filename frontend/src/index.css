@@ -402,6 +402,98 @@ p {
   opacity: 0.6;
 }
 
+/* ── Delete ────────────────────────────────────────────────── */
+
+.deck-row {
+  position: relative;
+}
+
+.deck-row .deck-item-title {
+  padding-right: 36px;
+}
+
+.deck-row-actions {
+  position: absolute;
+  top: 10px;
+  right: 4px;
+  opacity: 0;
+  transition: opacity 0.15s;
+}
+
+/* Visible on hover, keyboard focus, for the open deck, and while confirming */
+.deck-row:hover .deck-row-actions,
+.deck-row:focus-within .deck-row-actions,
+.deck-row:has([aria-current="true"]) .deck-row-actions,
+.deck-row-actions:has([data-confirming="true"]) {
+  opacity: 1;
+}
+
+/* Touch screens have no hover — always show it */
+@media (hover: none) {
+  .deck-row-actions {
+    opacity: 1;
+  }
+}
+
+.delete-wrap {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.delete-button {
+  border: 1px solid transparent;
+  background: transparent;
+  color: var(--muted);
+  transition: color 0.15s, background 0.15s, border-color 0.15s;
+}
+
+.delete-button:hover:not(:disabled) {
+  color: var(--danger);
+  border-color: var(--danger-soft);
+  background: var(--danger-soft);
+}
+
+.delete-button[data-confirming="true"] {
+  color: #fff;
+  background: var(--danger);
+  border-color: var(--danger);
+}
+
+.delete-button:disabled {
+  cursor: wait;
+  opacity: 0.6;
+}
+
+.delete-icon {
+  display: grid;
+  place-items: center;
+  min-width: 28px;
+  height: 28px;
+  padding: 0 6px;
+  border-radius: 8px;
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+}
+
+.delete-full {
+  padding: 4px 10px;
+  border-color: var(--rule);
+  border-radius: 999px;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  letter-spacing: 0.04em;
+}
+
+.deck-kicker .delete-wrap {
+  margin-left: auto;
+}
+
+.delete-error {
+  font-size: 12px;
+  color: var(--danger);
+}
+
 /* ── Empty state ───────────────────────────────────────────── */
 
 .empty {

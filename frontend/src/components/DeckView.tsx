@@ -3,11 +3,17 @@ import { duration } from "../lib/format.ts";
 import { useNow } from "../lib/hooks.ts";
 import { buildPipeline } from "../lib/pipeline.ts";
 import { isFinished } from "../lib/types.ts";
+import { DeleteDeckButton } from "./DeleteDeckButton.tsx";
 import { Pipeline } from "./Pipeline.tsx";
 import { SlideViewer } from "./SlideViewer.tsx";
 import { StatusBadge } from "./StatusBadge.tsx";
 
-export function DeckView({ deckId }: { deckId: string }) {
+type Props = {
+  deckId: string;
+  onDeleted: (id: string) => void;
+};
+
+export function DeckView({ deckId, onDeleted }: Props) {
   const { data: deck, isPending, isError, error, refetch } = useDeck(deckId);
   const running = deck ? !isFinished(deck.status) : false;
   const now = useNow(running);
@@ -44,6 +50,7 @@ export function DeckView({ deckId }: { deckId: string }) {
           <span className="mono muted">
             {running ? "running" : "took"} {elapsed}
           </span>
+          <DeleteDeckButton deckId={deck.id} running={running} onDeleted={onDeleted} variant="full" />
         </div>
         <h1 className="deck-title">
           {deck.title ?? <em className="writing">{running ? "Writing the deck…" : "Untitled deck"}</em>}
