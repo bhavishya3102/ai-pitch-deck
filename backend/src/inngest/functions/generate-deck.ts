@@ -87,9 +87,9 @@ export const generateDeck = inngest.createFunction(
             throw new NonRetriableError(`Deck was deleted: ${deckId}`);
           }
 
-          const imageBuffer = await generateSlideImage(slide.imagePrompt);
-          const fileName = `deck-${deckId}-slide-${order}.png`;
-          return uploadSlideImage(imageBuffer, fileName);
+          const image = await generateSlideImage(slide.imagePrompt);
+          const fileName = `deck-${deckId}-slide-${order}.${image.extension}`;
+          return uploadSlideImage(image.buffer, fileName);
         });
 
         // Delete-then-create so a retried step never leaves a duplicate slide

@@ -6,6 +6,11 @@ import OpenAI from "openai";
 const IMAGE_MODEL = "gpt-image-1-mini";
 const IMAGE_SIZE = "1024x1024";
 
+export type SlideImage = {
+  buffer: Buffer;
+  extension: "png" | "jpg";
+};
+
 // One shared client for the whole app — we create it once and reuse it.
 let openaiClient: OpenAI | null = null;
 
@@ -29,15 +34,18 @@ function getOpenAIClient(): OpenAI {
  * Dev shortcut: use a free stock photo instead of calling OpenAI.
  * Enable with USE_PLACEHOLDER_IMAGES=true in .env
  */
-async function fetchPlaceholderImage(): Promise<Buffer> {
-  const response = await fetch("https://picsum.photos/1024/1024");
+async function fetchPlaceholderImage(): Promise<SlideImage> {
+  const response = await fetch(`https://picsum.photos/${IMAGE_SIZE.replace("x", "/")}`, {
+    signal: AbortSignal.timeout(20_000),
+  });
 
   if (!response.ok) {
-    throw new Error("Could not download placeholder image");
+    throw new Error(`Could not download placeholder image (${response.status})`);
   }
 
   const bytes = await response.arrayBuffer();
-  return Buffer.from(bytes);
+  // picsum serves JPEG, so the uploaded file must be named .jpg — not .png
+  return { buffer: Buffer.from(bytes), extension: "jpg" };
 }
 
 /**
@@ -46,7 +54,7 @@ async function fetchPlaceholderImage(): Promise<Buffer> {
  * GPT image models always return base64-encoded PNG data —
  * we decode it into a Buffer so ImageKit can upload it next.
  */
-async function createImageWithOpenAI(prompt: string): Promise<Buffer> {
+async function createImageWithOpenAI(prompt: string): Promise<SlideImage> {
   const openai = getOpenAIClient();
 
   const response = await openai.images.generate({
@@ -64,7 +72,7 @@ async function createImageWithOpenAI(prompt: string): Promise<Buffer> {
     );
   }
 
-  return Buffer.from(base64Image, "base64");
+  return { buffer: Buffer.from(base64Image, "base64"), extension: "png" };
 }
 
 /**
@@ -72,9 +80,15 @@ async function createImageWithOpenAI(prompt: string): Promise<Buffer> {
  *
  * 1. If USE_PLACEHOLDER_IMAGES=true → stock photo (free, for local testing)
  * 2. Otherwise → OpenAI gpt-image model → PNG buffer for ImageKit upload
+ *
+ * Returns the bytes plus their file extension, since the two sources differ.
  */
-export async function generateSlideImage(prompt: string): Promise<Buffer> {
-  if (process.env.USE_PLACEHOLDER_IMAGES === "true") {
+export async function generateSlideImage(prompt: string): Promise<SlideImage> {
+  // Tolerant check: "true", "TRUE", "1" and stray spaces all turn placeholders on
+  const flag = process.env.USE_PLACEHOLDER_IMAGES?.trim().toLowerCase();
+
+  if (flag === "true" || flag === "1") {
+    console.log("USE_PLACEHOLDER_IMAGES is on — using a free stock photo instead of OpenAI");
     return fetchPlaceholderImage();
   }
 
