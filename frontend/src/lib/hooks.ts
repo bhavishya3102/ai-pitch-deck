@@ -1,28 +1,51 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 
-function readDeckParam(): string | null {
-  return new URLSearchParams(window.location.search).get("deck");
+export type Route = {
+  /** "landing" = marketing page, "app" = the deck studio */
+  view: "landing" | "app";
+  deckId: string | null;
+};
+
+/**
+ * Routing lives in the query string: "/" is the landing page, "?app=1" is the
+ * studio, "?deck=<id>" opens one deck. Old ?deck links keep working.
+ */
+function readRoute(): Route {
+  const params = new URLSearchParams(window.location.search);
+  const deckId = params.get("deck");
+  return {
+    view: deckId || params.has("app") ? "app" : "landing",
+    deckId,
+  };
 }
 
-/** Selected deck lives in ?deck=<id> so a refresh or shared link opens the same deck. */
-export function useSelectedDeck() {
-  const [deckId, setDeckId] = useState<string | null>(readDeckParam);
+function toUrl(route: Route): string {
+  const url = new URL(window.location.href);
+  url.searchParams.delete("deck");
+  url.searchParams.delete("app");
+
+  if (route.deckId) url.searchParams.set("deck", route.deckId);
+  else if (route.view === "app") url.searchParams.set("app", "1");
+
+  return url.toString();
+}
+
+export function useRoute() {
+  const [route, setRoute] = useState<Route>(readRoute);
 
   useEffect(() => {
-    const onPopState = () => setDeckId(readDeckParam());
+    const onPopState = () => setRoute(readRoute());
     window.addEventListener("popstate", onPopState);
     return () => window.removeEventListener("popstate", onPopState);
   }, []);
 
-  const select = useCallback((id: string | null) => {
-    const url = new URL(window.location.href);
-    if (id) url.searchParams.set("deck", id);
-    else url.searchParams.delete("deck");
-    window.history.pushState(null, "", url);
-    setDeckId(id);
+  const navigate = useCallback((next: Route) => {
+    window.history.pushState(null, "", toUrl(next));
+    setRoute(next);
+    window.scrollTo({ top: 0 });
   }, []);
 
-  return [deckId, select] as const;
+  return [route, navigate] as const;
 }
 
 /** Current time that ticks every second while `active` is true. */
@@ -36,4 +59,35 @@ export function useNow(active: boolean): number {
   }, [active]);
 
   return now;
+}
+
+/**
+ * Reveals elements as they scroll into view. Returns a ref for the section root.
+ * If IntersectionObserver is missing, nothing is hidden in the first place.
+ */
+export function useScrollReveal<T extends HTMLElement>() {
+  const ref = useRef<T>(null);
+
+  useEffect(() => {
+    const root = ref.current;
+    if (!root || typeof IntersectionObserver === "undefined") return;
+
+    root.dataset.revealReady = "true";
+
+    const observer = new IntersectionObserver(
+      (entries) => {
+        for (const entry of entries) {
+          if (!entry.isIntersecting) continue;
+          entry.target.setAttribute("data-revealed", "true");
+          observer.unobserve(entry.target);
+        }
+      },
+      { rootMargin: "0px 0px -12% 0px" },
+    );
+
+    root.querySelectorAll<HTMLElement>("[data-reveal]").forEach((target) => observer.observe(target));
+    return () => observer.disconnect();
+  }, []);
+
+  return ref;
 }
