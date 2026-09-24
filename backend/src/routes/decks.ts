@@ -1,10 +1,14 @@
 import { Router } from "express";
 
+import { authGuard } from "../lib/auth.ts";
 import { inngest } from "../inngest/client.ts";
 import { prisma } from "../lib/prisma.js";
 import type { DeckDetail, DeckListItem } from "../types/deck.ts";
 
 export const decksRouter = Router();
+
+// Every route below belongs to the signed-in user only
+decksRouter.use(authGuard);
 
 /** Create a deck and kick off the Inngest "deck/generate" flow. */
 decksRouter.post("/", async (req, res) => {
@@ -16,7 +20,7 @@ decksRouter.post("/", async (req, res) => {
     return;
   }
 
-  const deck = await prisma.deck.create({ data: { idea } });
+  const deck = await prisma.deck.create({ data: { idea, userId: req.userId } });
 
   try {
     await inngest.send({ name: "deck/generate", data: { deckId: deck.id } });
@@ -34,14 +38,15 @@ decksRouter.post("/", async (req, res) => {
   res.status(201).json({ id: deck.id });
 });
 
-/** All decks, newest first. */
-decksRouter.get("/", async (_req, res) => {
+/** The signed-in user's decks, newest first. */
+decksRouter.get("/", async (req, res) => {
   const decks = await prisma.deck.findMany({
+    where: { userId: req.userId },
     orderBy: { createdAt: "desc" },
     include: { _count: { select: { slides: true } } },
   });
 
-  const items: DeckListItem[] = decks.map(({ _count, createdAt, updatedAt, ...deck }) => ({
+  const items: DeckListItem[] = decks.map(({ _count, createdAt, updatedAt, userId, ...deck }) => ({
     ...deck,
     slideCount: _count.slides,
     createdAt: createdAt.toISOString(),
@@ -53,8 +58,9 @@ decksRouter.get("/", async (_req, res) => {
 
 /** Stop a running generation (if any) and delete the deck + its slides. */
 decksRouter.delete("/:id", async (req, res) => {
-  const deck = await prisma.deck.findUnique({
-    where: { id: req.params.id },
+  // findFirst with userId: another user's deck is simply "not found"
+  const deck = await prisma.deck.findFirst({
+    where: { id: req.params.id, userId: req.userId },
     select: { id: true, status: true },
   });
 
@@ -74,15 +80,15 @@ decksRouter.delete("/:id", async (req, res) => {
   }
 
   // Slides are removed by the onDelete: Cascade relation
-  await prisma.deck.deleteMany({ where: { id: deck.id } });
+  await prisma.deck.deleteMany({ where: { id: deck.id, userId: req.userId } });
 
   res.status(204).end();
 });
 
 /** One deck with its slides — the UI polls this while the flow runs. */
 decksRouter.get("/:id", async (req, res) => {
-  const deck = await prisma.deck.findUnique({
-    where: { id: req.params.id },
+  const deck = await prisma.deck.findFirst({
+    where: { id: req.params.id, userId: req.userId },
     include: { slides: { orderBy: { order: "asc" } } },
   });
 

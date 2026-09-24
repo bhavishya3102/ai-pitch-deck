@@ -1,6 +1,8 @@
 import "dotenv/config";
 import express from "express";
 import { serve } from "inngest/express";
+
+import { warnIfClerkMissing } from "./lib/auth.ts";
 import { inngest } from "./inngest/client.ts";
 import { generateDeck } from "./inngest/functions/index.ts";
 import { decksRouter } from "./routes/decks.ts";
@@ -11,6 +13,11 @@ const app = express();
 
 app.use(express.json());
 
+// Auth is mounted inside the deck routes only (see lib/auth.ts), so a missing or
+// wrong Clerk key can never take down /health or the Inngest endpoint.
+warnIfClerkMissing();
+
+// Inngest calls this endpoint itself — it must stay unauthenticated
 app.use("/api/inngest", serve({ client: inngest, functions }));
 app.use("/api/decks", decksRouter);
 

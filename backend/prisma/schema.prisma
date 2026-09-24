@@ -23,6 +23,8 @@ enum DeckStatus {
 
 model Deck {
   id           String     @id @default(cuid())
+  /// Clerk user id — every deck belongs to exactly one signed-in user
+  userId       String
   idea         String     @db.Text
   title        String?
   status       DeckStatus @default(PENDING)
@@ -30,6 +32,8 @@ model Deck {
   createdAt    DateTime   @default(now())
   updatedAt    DateTime   @updatedAt
   slides       Slide[]
+
+  @@index([userId])
 }
 
 model Slide {

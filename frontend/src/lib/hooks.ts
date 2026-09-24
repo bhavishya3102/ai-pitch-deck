@@ -1,8 +1,8 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 
 export type Route = {
-  /** "landing" = marketing page, "app" = the deck studio */
-  view: "landing" | "app";
+  /** "landing" = marketing page, "app" = the deck studio, plus the auth pages */
+  view: "landing" | "app" | "sign-in" | "sign-up";
   deckId: string | null;
 };
 
@@ -13,6 +13,12 @@ export type Route = {
 function readRoute(): Route {
   const params = new URLSearchParams(window.location.search);
   const deckId = params.get("deck");
+  const auth = params.get("auth");
+
+  if (auth === "sign-in" || auth === "sign-up") {
+    return { view: auth, deckId: null };
+  }
+
   return {
     view: deckId || params.has("app") ? "app" : "landing",
     deckId,
@@ -23,8 +29,11 @@ function toUrl(route: Route): string {
   const url = new URL(window.location.href);
   url.searchParams.delete("deck");
   url.searchParams.delete("app");
+  url.searchParams.delete("auth");
+  url.hash = "";
 
-  if (route.deckId) url.searchParams.set("deck", route.deckId);
+  if (route.view === "sign-in" || route.view === "sign-up") url.searchParams.set("auth", route.view);
+  else if (route.deckId) url.searchParams.set("deck", route.deckId);
   else if (route.view === "app") url.searchParams.set("app", "1");
 
   return url.toString();

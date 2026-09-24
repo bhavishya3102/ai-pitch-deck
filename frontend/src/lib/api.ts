@@ -1,5 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
+import { authHeader } from "./auth-token.ts";
 import { isFinished, type DeckDetail, type DeckListItem } from "./types.ts";
 
 export class ApiError extends Error {
@@ -18,8 +19,9 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
   let response: Response;
   try {
     response = await fetch(path, {
-      headers: { "Content-Type": "application/json" },
       ...init,
+      // Clerk session token — the API scopes every deck to this user
+      headers: { "Content-Type": "application/json", ...(await authHeader()), ...init?.headers },
     });
   } catch {
     throw new ApiError(0, { error: "Can't reach the server. Is the backend running on port 4000?" });

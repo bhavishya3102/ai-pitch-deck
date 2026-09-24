@@ -1,6 +1,7 @@
 import { useState, type FormEvent, type KeyboardEvent } from "react";
 
 import { ApiError, useCreateDeck } from "../lib/api.ts";
+import { takePendingIdea } from "../lib/pending-idea.ts";
 
 const MIN_LENGTH = 20;
 
@@ -11,7 +12,8 @@ const EXAMPLES = [
 ];
 
 export function Composer({ onCreated }: { onCreated: (id: string) => void }) {
-  const [idea, setIdea] = useState("");
+  // An idea typed on the landing page before signing in lands here
+  const [idea, setIdea] = useState(() => takePendingIdea() ?? "");
   const createDeck = useCreateDeck();
 
   const length = idea.trim().length;

@@ -1,6 +1,6 @@
 import { Component, type ReactNode } from "react";
 
-type Props = { children: ReactNode };
+type Props = { children: ReactNode; fallback?: ReactNode };
 type State = { error: Error | null };
 
 /** Catches render crashes so one bad deck can't blank the whole app. */
@@ -17,6 +17,7 @@ export class ErrorBoundary extends Component<Props, State> {
 
   render() {
     if (!this.state.error) return this.props.children;
+    if (this.props.fallback) return this.props.fallback;
 
     return (
       <div className="deck-view">

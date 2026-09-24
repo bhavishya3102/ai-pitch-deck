@@ -2,6 +2,7 @@ import { useEffect, useRef, useState, type FormEvent } from "react";
 
 import { ApiError, useCreateDeck } from "../lib/api.ts";
 import { useScrollReveal } from "../lib/hooks.ts";
+import { savePendingIdea, takePendingIdea } from "../lib/pending-idea.ts";
 
 const MIN_LENGTH = 20;
 
@@ -65,15 +66,18 @@ function useScrolledPastHero() {
 }
 
 type Props = {
+  isSignedIn: boolean;
   onStart: () => void;
   onCreated: (deckId: string) => void;
+  onSignIn: () => void;
 };
 
-export function Landing({ onStart, onCreated }: Props) {
+export function Landing({ isSignedIn, onStart, onCreated, onSignIn }: Props) {
   const revealRef = useScrollReveal<HTMLDivElement>();
   const [sentinelRef, scrolled] = useScrolledPastHero();
   const inputRef = useRef<HTMLTextAreaElement>(null);
-  const [idea, setIdea] = useState("");
+  // An idea typed before signing in comes back here after the redirect
+  const [idea, setIdea] = useState(() => takePendingIdea() ?? "");
   const createDeck = useCreateDeck();
 
   const length = idea.trim().length;
@@ -82,6 +86,13 @@ export function Landing({ onStart, onCreated }: Props) {
   function submit(event: FormEvent) {
     event.preventDefault();
     if (!ready) return;
+
+    // Signed out? Keep the idea and continue after sign-in instead of failing with 401
+    if (!isSignedIn) {
+      savePendingIdea(idea.trim());
+      onSignIn();
+      return;
+    }
 
     createDeck.mutate(idea.trim(), {
       onSuccess: ({ id }) => onCreated(id),
@@ -104,8 +115,8 @@ export function Landing({ onStart, onCreated }: Props) {
           Pitch<em>Press</em>
         </span>
         <div className="landing-bar-actions">
-          <button type="button" className="landing-link" onClick={onStart}>
-            Open the studio
+          <button type="button" className="landing-link" onClick={isSignedIn ? onStart : onSignIn}>
+            {isSignedIn ? "Open the studio" : "Sign in"}
           </button>
           <button type="button" className="cta-button cta-small" data-visible={scrolled} onClick={focusInput}>
             Build my deck
@@ -165,7 +176,9 @@ export function Landing({ onStart, onCreated }: Props) {
                     ? "Press Enter to start"
                     : length < MIN_LENGTH
                       ? `${MIN_LENGTH - length} more characters`
-                      : "Ready — press Enter"}
+                      : isSignedIn
+                        ? "Ready — press Enter"
+                        : "Ready — you'll sign in next"}
               </span>
               <span className="mono muted hero-cost">Free to try · nothing to install</span>
             </div>
@@ -302,8 +315,8 @@ export function Landing({ onStart, onCreated }: Props) {
             Build my deck
             <span aria-hidden>→</span>
           </button>
-          <button type="button" className="landing-link closing-secondary" onClick={onStart}>
-            or browse decks you already made
+          <button type="button" className="landing-link closing-secondary" onClick={isSignedIn ? onStart : onSignIn}>
+            {isSignedIn ? "or browse decks you already made" : "or sign in to see your decks"}
           </button>
         </div>
       </section>
