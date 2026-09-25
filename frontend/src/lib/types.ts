@@ -2,6 +2,8 @@
 
 export type DeckStatus = "PENDING" | "GENERATING" | "COMPLETE" | "FAILED";
 
+export type SlideImageStatus = "READY" | "GENERATING" | "FAILED";
+
 export type Slide = {
   id: string;
   order: number;
@@ -9,6 +11,7 @@ export type Slide = {
   content: string;
   imagePrompt: string;
   imageUrl: string | null;
+  imageStatus: SlideImageStatus;
 };
 
 export type DeckDetail = {
@@ -35,4 +38,9 @@ export type DeckListItem = {
 
 export function isFinished(status: DeckStatus): boolean {
   return status === "COMPLETE" || status === "FAILED";
+}
+
+/** True while any slide is being re-illustrated — the deck view keeps polling. */
+export function hasSlideInProgress(deck: { slides: Slide[] }): boolean {
+  return deck.slides.some((slide) => slide.imageStatus === "GENERATING");
 }

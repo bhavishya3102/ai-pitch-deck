@@ -1,6 +1,6 @@
 import { useState } from "react";
 
-import { ApiError, useDeck } from "../lib/api.ts";
+import { ApiError, useDeck, useExportDeck } from "../lib/api.ts";
 import { duration } from "../lib/format.ts";
 import { requestFullscreen } from "../lib/fullscreen.ts";
 import { useNow } from "../lib/hooks.ts";
@@ -24,6 +24,7 @@ export function DeckView({ deckId, onDeleted }: Props) {
   // Index lives here so "Present" starts on the slide you are looking at
   const [slideIndex, setSlideIndex] = useState(0);
   const [presenting, setPresenting] = useState(false);
+  const exportDeck = useExportDeck(deckId);
 
   if (isPending) {
     return <div className="deck-view loading mono muted">Loading deck…</div>;
@@ -57,12 +58,38 @@ export function DeckView({ deckId, onDeleted }: Props) {
           <span className="mono muted">
             {running ? "running" : "took"} {elapsed}
           </span>
+          {deck.slides.length > 0 && (
+            <span className="export-group">
+              <span className="mono muted">Export</span>
+              <button
+                type="button"
+                className="export-button"
+                onClick={() => exportDeck.mutate("pptx")}
+                disabled={exportDeck.isPending}
+              >
+                {exportDeck.isPending && exportDeck.variables === "pptx" ? "Building…" : "PPTX"}
+              </button>
+              <button
+                type="button"
+                className="export-button"
+                onClick={() => exportDeck.mutate("pdf")}
+                disabled={exportDeck.isPending}
+              >
+                {exportDeck.isPending && exportDeck.variables === "pdf" ? "Building…" : "PDF"}
+              </button>
+            </span>
+          )}
           <DeleteDeckButton deckId={deck.id} running={running} onDeleted={onDeleted} variant="full" />
         </div>
         <h1 className="deck-title">
           {deck.title ?? <em className="writing">{running ? "Writing the deck…" : "Untitled deck"}</em>}
         </h1>
         <p className="deck-idea">“{deck.idea}”</p>
+        {exportDeck.isError && (
+          <p className="form-error" role="alert">
+            {exportDeck.error.message}
+          </p>
+        )}
         {stuck && (
           <p className="notice" role="status">
             Still queued after 30 seconds. Make sure the Inngest dev server is running (
@@ -78,6 +105,7 @@ export function DeckView({ deckId, onDeleted }: Props) {
         </aside>
         <section className="deck-slides" aria-label="Slides">
           <SlideViewer
+            deckId={deck.id}
             slides={deck.slides}
             generating={running}
             index={slideIndex}

@@ -4,10 +4,10 @@ import { serve } from "inngest/express";
 
 import { warnIfClerkMissing } from "./lib/auth.ts";
 import { inngest } from "./inngest/client.ts";
-import { generateDeck } from "./inngest/functions/index.ts";
+import { generateDeck, regenerateSlideImage } from "./inngest/functions/index.ts";
 import { decksRouter } from "./routes/decks.ts";
 
-const functions = [generateDeck];
+const functions = [generateDeck, regenerateSlideImage];
 
 const app = express();
 

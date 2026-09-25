@@ -14,6 +14,13 @@ datasource db {
 
 
 
+/// Per-slide image state, so one slide can be re-illustrated on its own
+enum SlideImageStatus {
+  READY
+  GENERATING
+  FAILED
+}
+
 enum DeckStatus {
   PENDING
   GENERATING
@@ -45,6 +52,7 @@ model Slide {
   content     String   @db.Text
   imagePrompt String   @db.Text
   imageUrl    String?
+  imageStatus SlideImageStatus @default(READY)
   createdAt   DateTime @default(now())
 
   @@index([deckId])

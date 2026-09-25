@@ -1,7 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
 import { authHeader } from "./auth-token.ts";
-import { isFinished, type DeckDetail, type DeckListItem } from "./types.ts";
+import { hasSlideInProgress, isFinished, type DeckDetail, type DeckListItem } from "./types.ts";
 
 export class ApiError extends Error {
   readonly status: number;
@@ -65,8 +65,10 @@ export function useDeck(id: string | null) {
     retry: (failureCount, error) => !(error instanceof ApiError && error.status === 404) && failureCount < 2,
     refetchInterval: (query) => {
       if (query.state.status === "error") return false;
-      const status = query.state.data?.status;
-      return status && isFinished(status) ? false : 1500;
+      const deck = query.state.data;
+      if (!deck) return 1500;
+      // Poll while the deck runs, and while any single slide is being re-illustrated
+      return isFinished(deck.status) && !hasSlideInProgress(deck) ? false : 1500;
     },
   });
 }
@@ -99,6 +101,68 @@ export function useDeleteDeck(onDeleted: (id: string) => void) {
       onDeleted(id);
     },
     onSettled: () => queryClient.invalidateQueries({ queryKey: deckKeys.all }),
+  });
+}
+
+/** Edit one slide's text. */
+export function useUpdateSlide(deckId: string) {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: ({ slideId, ...fields }: { slideId: string; title?: string; content?: string; imagePrompt?: string }) =>
+      request<null>(`/api/decks/${deckId}/slides/${slideId}`, {
+        method: "PATCH",
+        body: JSON.stringify(fields),
+      }),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: deckKeys.detail(deckId) }),
+  });
+}
+
+/** Queue a new image for one slide; polling picks up the result. */
+export function useRegenerateSlideImage(deckId: string) {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: (slideId: string) =>
+      request<{ id: string }>(`/api/decks/${deckId}/slides/${slideId}/regenerate-image`, { method: "POST" }),
+    onSettled: () => queryClient.invalidateQueries({ queryKey: deckKeys.detail(deckId) }),
+  });
+}
+
+/** Filename the server suggests, e.g. attachment; filename="my-deck.pptx" */
+function filenameFrom(header: string | null, fallback: string): string {
+  const match = header?.match(/filename="?([^"]+)"?/);
+  return match?.[1] ?? fallback;
+}
+
+/**
+ * Downloads need the Clerk token, so a plain <a href> won't do: fetch the file,
+ * then hand the blob to a temporary link.
+ */
+export function useExportDeck(deckId: string) {
+  return useMutation({
+    mutationFn: async (format: "pptx" | "pdf") => {
+      const response = await fetch(`/api/decks/${deckId}/export?format=${format}`, {
+        headers: await authHeader(),
+      });
+
+      if (!response.ok) {
+        const body = await response.json().catch(() => null);
+        throw new ApiError(response.status, body);
+      }
+
+      const blob = await response.blob();
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = filenameFrom(response.headers.get("Content-Disposition"), `pitch-deck.${format}`);
+      document.body.append(link);
+      link.click();
+      link.remove();
+      // Revoke on the next tick so the download has started
+      setTimeout(() => URL.revokeObjectURL(url), 10_000);
+      return format;
+    },
   });
 }
 

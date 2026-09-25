@@ -739,6 +739,7 @@ p {
   display: flex;
   flex-direction: column;
   gap: 14px;
+  min-height: 0;
   padding: clamp(20px, 3.2vw, 44px);
   overflow-y: auto;
 }
@@ -2241,6 +2242,204 @@ p {
     aspect-ratio: auto;
     height: 100%;
   }
+}
+
+/* ── Slide editing, regeneration & export ──────────────────── */
+
+.export-group {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.export-button {
+  padding: 4px 10px;
+  border: 1px solid var(--rule);
+  border-radius: 999px;
+  background: var(--card);
+  font-family: var(--font-mono);
+  font-size: 11px;
+  letter-spacing: 0.04em;
+  color: var(--ink-soft);
+  transition: border-color 0.2s, color 0.2s, background 0.2s;
+}
+
+.export-button:hover:not(:disabled) {
+  border-color: var(--ink);
+  color: var(--ink);
+}
+
+.export-button:disabled {
+  opacity: 0.55;
+  cursor: wait;
+}
+
+.edit-slide {
+  align-self: flex-start;
+  margin-top: auto;
+  padding: 5px 12px;
+  border: 1px dashed var(--rule);
+  border-radius: 999px;
+  background: transparent;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--muted);
+  transition: border-color 0.2s, color 0.2s;
+}
+
+.edit-slide:hover {
+  border-color: var(--signal);
+  color: var(--ink);
+}
+
+/* The editor replaces the slide text in place */
+.slide-editor {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  animation: rise 0.25s cubic-bezier(0.2, 0.7, 0.2, 1) both;
+}
+
+.editor-field {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+
+.editor-field .eyebrow {
+  margin-bottom: 0;
+  font-size: 10px;
+}
+
+.editor-input {
+  width: 100%;
+  padding: 9px 12px;
+  border: 1px solid var(--rule);
+  border-radius: 10px;
+  background: var(--paper);
+  font-family: var(--font-body);
+  font-size: 14px;
+  line-height: 1.45;
+  color: var(--ink);
+  transition: border-color 0.2s, box-shadow 0.2s;
+}
+
+.editor-input:focus {
+  outline: none;
+  border-color: var(--ink);
+  box-shadow: 0 0 0 3px var(--signal-soft);
+}
+
+.editor-area {
+  resize: vertical;
+  min-height: 64px;
+}
+
+.editor-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.editor-buttons {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.editor-cancel {
+  width: auto;
+  height: 32px;
+  padding: 0 14px;
+  border-radius: 999px;
+  font-family: var(--font-mono);
+  font-size: 11px;
+}
+
+.slide-editor .button-primary {
+  padding: 7px 14px;
+  font-size: 13px;
+}
+
+/* Regenerate control sits on the image */
+.slide-image-actions {
+  position: absolute;
+  right: 10px;
+  bottom: 10px;
+  z-index: 2;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  opacity: 0;
+  transition: opacity 0.2s;
+}
+
+.slide:hover .slide-image-actions,
+.slide-image-actions:focus-within,
+.slide-image[data-working="true"] .slide-image-actions {
+  opacity: 1;
+}
+
+@media (hover: none) {
+  .slide-image-actions {
+    opacity: 1;
+  }
+}
+
+.image-button {
+  padding: 6px 12px;
+  border: 1px solid rgb(255 255 255 / 35%);
+  border-radius: 999px;
+  background: rgb(28 26 22 / 78%);
+  backdrop-filter: blur(6px);
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--paper);
+  transition: background 0.2s, border-color 0.2s;
+}
+
+.image-button:hover:not(:disabled) {
+  background: var(--signal);
+  border-color: var(--signal);
+}
+
+.image-button:disabled {
+  cursor: wait;
+  opacity: 0.8;
+}
+
+.image-failed {
+  padding: 4px 8px;
+  border-radius: 6px;
+  background: var(--danger);
+  color: #fff;
+  font-size: 10px;
+}
+
+.image-working {
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  display: grid;
+  place-items: center;
+  background: rgb(28 26 22 / 45%);
+  color: var(--paper);
+  letter-spacing: 0.06em;
+}
+
+.slide-image[data-working="true"] img {
+  filter: grayscale(0.4) blur(1px);
+}
+
+.image-error {
+  position: absolute;
+  left: 10px;
+  right: 10px;
+  bottom: 52px;
+  z-index: 2;
+  margin: 0;
 }
 
 /* ── Motion ────────────────────────────────────────────────── */

@@ -83,11 +83,14 @@ async function createImageWithOpenAI(prompt: string): Promise<SlideImage> {
  *
  * Returns the bytes plus their file extension, since the two sources differ.
  */
-export async function generateSlideImage(prompt: string): Promise<SlideImage> {
+export function usesPlaceholderImages(): boolean {
   // Tolerant check: "true", "TRUE", "1" and stray spaces all turn placeholders on
   const flag = process.env.USE_PLACEHOLDER_IMAGES?.trim().toLowerCase();
+  return flag === "true" || flag === "1";
+}
 
-  if (flag === "true" || flag === "1") {
+export async function generateSlideImage(prompt: string): Promise<SlideImage> {
+  if (usesPlaceholderImages()) {
     console.log("USE_PLACEHOLDER_IMAGES is on — using a free stock photo instead of OpenAI");
     return fetchPlaceholderImage();
   }

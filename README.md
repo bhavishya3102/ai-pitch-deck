@@ -14,8 +14,9 @@ idea → Inngest job → OpenAI agent (guardrails) → image per slide → Image
 | `backend/` | Express 5, Inngest, OpenAI Agents SDK, Prisma 7 + Postgres (Neon), ImageKit, Clerk |
 | `frontend/` | React 19 + Vite, TanStack Query, Clerk |
 
-Features: live pipeline view, per-slide images, full-screen presenting with a highlighter,
-stop & delete a running generation, and per-user decks behind sign-in.
+Features: live pipeline view, per-slide images, **edit any slide**, **re-illustrate a single slide**,
+**export to PPTX / PDF**, full-screen presenting with a highlighter, stop & delete a running
+generation, and per-user decks behind sign-in.
 
 ## Setup
 
@@ -121,9 +122,36 @@ and are invisible in the UI.
 | `save-slide-n` | delete-then-create in one transaction, so a retry can't duplicate a slide |
 | `mark-complete` | status `COMPLETE` |
 
+A second function, `regenerate-slide-image.ts`, handles one slide on its own and listens to the same
+`deck/cancel` event.
+
 Things that would otherwise waste money or hang are non-retriable: a missing `OPENAI_API_KEY`,
-a guardrail block, and a deck deleted mid-run. Deleting a deck sends `deck/cancel`, which stops the run
-through the function's `cancelOn`.
+a guardrail block, and a deck (or slide) deleted mid-run. Deleting a deck sends `deck/cancel`, which stops
+both functions through their `cancelOn`.
+
+## Editing and re-illustrating
+
+Open a deck and use **Edit slide** to change the title, the bullet points, or the image prompt.
+Limits match what the agent is allowed to produce (title 3–80, content 20–500, prompt 10–300 characters),
+so an edited deck stays exportable.
+
+**Regenerate image** (on the slide image) queues `slide/regenerate-image`, a separate Inngest function that
+re-illustrates just that slide from its current prompt — so you can fix one bad image without rebuilding
+the deck. The slide carries its own `imageStatus` (`READY` / `GENERATING` / `FAILED`); the UI keeps polling
+while any slide is mid-regeneration, and the old image stays on screen until the new one is saved. Each
+upload gets a fresh file name, so no browser ever shows a stale cached image.
+
+## Export
+
+| Format | Endpoint | Built with |
+|---|---|---|
+| PowerPoint | `GET /api/decks/:id/export?format=pptx` | `pptxgenjs`, 16:9, one slide per deck slide |
+| PDF | `GET /api/decks/:id/export?format=pdf` | `pdfkit`, 960 × 540 pt landscape pages |
+
+Both are rendered on the server in the app's own palette (paper background, serif titles, orange rule,
+image on the right) and include the current text — edits and regenerated images are picked up immediately.
+A slide whose image can't be fetched still exports, just without the picture. The download carries the
+Clerk token, so files are only ever built for decks you own.
 
 ## API
 
@@ -135,6 +163,9 @@ All deck routes need a Clerk session token and only ever touch the caller's own 
 | `GET` | `/api/decks` | list your decks |
 | `GET` | `/api/decks/:id` | one deck with slides (the UI polls this) |
 | `DELETE` | `/api/decks/:id` | stop the run if any, then delete deck + slides |
+| `PATCH` | `/api/decks/:deckId/slides/:slideId` | edit title / content / image prompt |
+| `POST` | `/api/decks/:deckId/slides/:slideId/regenerate-image` | queue a new image for one slide |
+| `GET` | `/api/decks/:id/export?format=pptx\|pdf` | download the deck as a file |
 | `GET` | `/health` | no auth |
 | `ALL` | `/api/inngest` | Inngest's own endpoint, no auth |
 
@@ -160,3 +191,5 @@ Open a deck and press **Present**:
 | Frontend shows "One key away" | `VITE_CLERK_PUBLISHABLE_KEY` missing in `frontend/.env` |
 | Deck stays GENERATING forever | the backend or Inngest was restarted mid-run; the run is gone — delete the deck |
 | Images cost too much while testing | set `USE_PLACEHOLDER_IMAGES=true` (free stock photos; slide text still uses OpenAI) |
+| "Regenerate image" fails instantly | Inngest dev server isn't running; the slide shows `couldn't re-illustrate` and keeps its old image |
+| Export says the deck has no slides | generation hasn't produced any slide yet (409) |

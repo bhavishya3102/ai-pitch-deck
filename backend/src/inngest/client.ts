@@ -11,6 +11,12 @@ export type InngestEvents = {
       deckId: string;
     };
   };
+  "slide/regenerate-image": {
+    data: {
+      deckId: string;
+      slideId: string;
+    };
+  };
 };
 
 export const inngest = new Inngest({

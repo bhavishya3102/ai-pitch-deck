@@ -1,5 +1,7 @@
 export type DeckStatus = "PENDING" | "GENERATING" | "COMPLETE" | "FAILED";
 
+export type SlideImageStatus = "READY" | "GENERATING" | "FAILED";
+
 export type Slide = {
   id: string;
   order: number;
@@ -7,6 +9,7 @@ export type Slide = {
   content: string;
   imagePrompt: string;
   imageUrl: string | null;
+  imageStatus: SlideImageStatus;
 };
 
 export type DeckDetail = {
