@@ -2549,3 +2549,294 @@ p {
     aspect-ratio: auto;
   }
 }
+
+/* ── Capturing feedback while presenting ───────────────────── */
+
+/* Note and Flag bring the bar to seven controls — keep it on one row and let it
+   scroll on a narrow screen, so it never pushes into the note box above it. */
+.present-bar {
+  max-width: 94vw;
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+
+.present-note-count {
+  display: inline-grid;
+  place-items: center;
+  min-width: 18px;
+  height: 18px;
+  padding: 0 5px;
+  border-radius: 999px;
+  background: var(--signal);
+  color: #fff;
+  font-family: var(--font-mono);
+  font-size: 10px;
+}
+
+/* Brief confirmation — it must never sit on the slide for long */
+.present-flash {
+  position: fixed;
+  top: 26px;
+  left: 50%;
+  z-index: 5;
+  padding: 8px 16px;
+  border-radius: 999px;
+  background: rgb(28 26 22 / 88%);
+  border: 1px solid rgb(255 255 255 / 14%);
+  backdrop-filter: blur(8px);
+  color: var(--paper);
+  font-family: var(--font-mono);
+  font-size: 12px;
+  transform: translate(-50%, 0);
+  animation: rise 0.25s cubic-bezier(0.2, 0.7, 0.2, 1) both;
+}
+
+.present-note {
+  position: fixed;
+  bottom: 84px;
+  left: 50%;
+  z-index: 4;
+  width: min(620px, 92vw);
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 14px;
+  border-radius: 16px;
+  background: rgb(28 26 22 / 92%);
+  border: 1px solid rgb(255 255 255 / 16%);
+  backdrop-filter: blur(10px);
+  transform: translate(-50%, 0);
+  animation: rise 0.2s cubic-bezier(0.2, 0.7, 0.2, 1) both;
+}
+
+.present-note-label {
+  font-size: 11px;
+  letter-spacing: 0.08em;
+  color: rgb(244 239 228 / 62%);
+}
+
+.present-note-input {
+  width: 100%;
+  padding: 10px 12px;
+  border: 1px solid rgb(255 255 255 / 18%);
+  border-radius: 10px;
+  background: rgb(255 255 255 / 6%);
+  font-family: var(--font-body);
+  font-size: 15px;
+  line-height: 1.45;
+  color: var(--paper);
+  resize: none;
+}
+
+.present-note-input::placeholder {
+  color: rgb(244 239 228 / 38%);
+}
+
+.present-note-input:focus {
+  outline: none;
+  border-color: var(--signal);
+}
+
+.present-note-hint {
+  margin: 0;
+  font-size: 10px;
+  color: rgb(244 239 228 / 48%);
+}
+
+.present-note-hint kbd {
+  padding: 1px 5px;
+  border-radius: 4px;
+  background: rgb(255 255 255 / 14%);
+  font-family: var(--font-mono);
+}
+
+/* ── Feedback panel ────────────────────────────────────────── */
+
+.feedback {
+  margin-top: 44px;
+  padding-top: 26px;
+  border-top: 1px solid var(--rule);
+}
+
+.feedback-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.feedback-head .eyebrow {
+  margin-bottom: 0;
+}
+
+.feedback-empty {
+  max-width: 62ch;
+  margin: 12px 0 0;
+  font-size: 14px;
+}
+
+.feedback-empty kbd {
+  padding: 1px 6px;
+  border: 1px solid var(--rule);
+  border-radius: 5px;
+  background: var(--card);
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--ink-soft);
+}
+
+.feedback-list {
+  display: grid;
+  gap: 14px;
+  margin: 18px 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.feedback-group {
+  padding: 12px 16px 6px;
+  border: 1px solid var(--rule);
+  border-radius: var(--radius);
+  background: var(--card);
+}
+
+.feedback-slide {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  width: 100%;
+  padding: 0;
+  border: 0;
+  background: none;
+  text-align: left;
+  font-family: var(--font-body);
+  font-size: 15px;
+  font-weight: 500;
+  color: var(--ink);
+}
+
+.feedback-slide span {
+  font-size: 11px;
+  color: var(--signal);
+}
+
+.feedback-slide:hover {
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+.note-list {
+  margin: 8px 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.note {
+  display: grid;
+  grid-template-columns: 18px minmax(0, 1fr);
+  gap: 12px;
+  padding: 10px 0;
+  border-top: 1px dashed var(--rule);
+}
+
+.note[data-resolved="true"] {
+  opacity: 0.55;
+}
+
+.note[data-resolved="true"] .note-body {
+  text-decoration: line-through;
+}
+
+.note-tick {
+  margin: 3px 0 0;
+  width: 15px;
+  height: 15px;
+  accent-color: var(--signal);
+}
+
+.note-main {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 0;
+}
+
+.note-body {
+  margin: 0;
+  font-size: 14px;
+  line-height: 1.5;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.note-body[data-empty="true"] {
+  font-style: italic;
+  color: var(--muted);
+}
+
+.note-input {
+  font-size: 14px;
+  min-height: 52px;
+}
+
+.note-meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px;
+  font-size: 11px;
+}
+
+.note-link {
+  padding: 0;
+  border: 0;
+  background: none;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--ink-soft);
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+.note-link:hover:not(:disabled) {
+  color: var(--ink);
+}
+
+.note-link:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+
+.note-save {
+  color: var(--signal);
+}
+
+.note-delete:hover:not(:disabled) {
+  color: var(--danger);
+}
+
+@media (max-width: 860px) {
+  .present-note {
+    bottom: 96px;
+  }
+}
+
+.feedback-group-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.feedback-group-head .mono {
+  font-size: 11px;
+}
+
+.note-apply {
+  color: var(--signal);
+}
+
+.note-failed {
+  color: var(--danger);
+}

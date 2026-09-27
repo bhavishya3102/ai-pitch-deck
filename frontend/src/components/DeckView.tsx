@@ -7,6 +7,7 @@ import { useNow } from "../lib/hooks.ts";
 import { buildPipeline } from "../lib/pipeline.ts";
 import { isFinished } from "../lib/types.ts";
 import { DeleteDeckButton } from "./DeleteDeckButton.tsx";
+import { FeedbackPanel } from "./FeedbackPanel.tsx";
 import { Pipeline } from "./Pipeline.tsx";
 import { PresentMode } from "./PresentMode.tsx";
 import { SlideViewer } from "./SlideViewer.tsx";
@@ -120,8 +121,13 @@ export function DeckView({ deckId, onDeleted }: Props) {
         </section>
       </div>
 
+      {deck.slides.length > 0 && (
+        <FeedbackPanel deckId={deck.id} slides={deck.slides} onJumpToSlide={setSlideIndex} />
+      )}
+
       {presenting && deck.slides.length > 0 && (
         <PresentMode
+          deckId={deck.id}
           slides={deck.slides}
           startIndex={slideIndex}
           deckTitle={deck.title ?? "Pitch deck"}

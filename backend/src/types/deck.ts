@@ -2,6 +2,16 @@ export type DeckStatus = "PENDING" | "GENERATING" | "COMPLETE" | "FAILED";
 
 export type SlideImageStatus = "READY" | "GENERATING" | "FAILED";
 
+export type SlideTextStatus = "READY" | "REWRITING" | "FAILED";
+
+/** Feedback captured on a slide — an empty body is a quick flag from a live demo. */
+export type SlideNote = {
+  id: string;
+  body: string;
+  resolved: boolean;
+  createdAt: string;
+};
+
 export type Slide = {
   id: string;
   order: number;
@@ -10,6 +20,8 @@ export type Slide = {
   imagePrompt: string;
   imageUrl: string | null;
   imageStatus: SlideImageStatus;
+  textStatus: SlideTextStatus;
+  notes: SlideNote[];
 };
 
 export type DeckDetail = {

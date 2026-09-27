@@ -1,7 +1,7 @@
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient, type QueryClient } from "@tanstack/react-query";
 
 import { authHeader } from "./auth-token.ts";
-import { hasSlideInProgress, isFinished, type DeckDetail, type DeckListItem } from "./types.ts";
+import { hasSlideInProgress, isFinished, type DeckDetail, type DeckListItem, type SlideNote } from "./types.ts";
 
 export class ApiError extends Error {
   readonly status: number;
@@ -125,6 +125,103 @@ export function useRegenerateSlideImage(deckId: string) {
   return useMutation({
     mutationFn: (slideId: string) =>
       request<{ id: string }>(`/api/decks/${deckId}/slides/${slideId}/regenerate-image`, { method: "POST" }),
+    onSettled: () => queryClient.invalidateQueries({ queryKey: deckKeys.detail(deckId) }),
+  });
+}
+
+/**
+ * Capture feedback on a slide. Called mid-presentation, so it never blocks the
+ * view: the note is saved in the background and the deck refetches after.
+ */
+export function useAddNote(deckId: string) {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: ({ slideId, body }: { slideId: string; body: string }) =>
+      request<{ id: string }>(`/api/decks/${deckId}/slides/${slideId}/notes`, {
+        method: "POST",
+        body: JSON.stringify({ body }),
+      }),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: deckKeys.detail(deckId) }),
+  });
+}
+
+/**
+ * Notes live inside the cached deck, so changing one means patching that deck.
+ * Without it the tick box and Delete sit still for the second or two the refetch
+ * takes, and the click reads as lost.
+ */
+function patchCachedNotes(
+  queryClient: QueryClient,
+  deckId: string,
+  apply: (notes: SlideNote[]) => SlideNote[],
+) {
+  queryClient.setQueryData<DeckDetail>(deckKeys.detail(deckId), (deck) =>
+    deck ? { ...deck, slides: deck.slides.map((slide) => ({ ...slide, notes: apply(slide.notes) })) } : deck,
+  );
+}
+
+/** Fill in a flag's detail after the meeting, or tick it off once handled. */
+export function useUpdateNote(deckId: string) {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: ({ noteId, ...fields }: { noteId: string; body?: string; resolved?: boolean }) =>
+      request<null>(`/api/decks/${deckId}/notes/${noteId}`, {
+        method: "PATCH",
+        body: JSON.stringify(fields),
+      }),
+    onMutate: async ({ noteId, body, resolved }) => {
+      await queryClient.cancelQueries({ queryKey: deckKeys.detail(deckId) });
+      const previous = queryClient.getQueryData<DeckDetail>(deckKeys.detail(deckId));
+      patchCachedNotes(queryClient, deckId, (notes) =>
+        notes.map((note) =>
+          note.id === noteId
+            ? { ...note, ...(body === undefined ? {} : { body }), ...(resolved === undefined ? {} : { resolved }) }
+            : note,
+        ),
+      );
+      return { previous };
+    },
+    onError: (_error, _variables, context) => {
+      if (context?.previous) queryClient.setQueryData(deckKeys.detail(deckId), context.previous);
+    },
+    onSettled: () => queryClient.invalidateQueries({ queryKey: deckKeys.detail(deckId) }),
+  });
+}
+
+export function useDeleteNote(deckId: string) {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: (noteId: string) =>
+      request<null>(`/api/decks/${deckId}/notes/${noteId}`, { method: "DELETE" }),
+    onMutate: async (noteId) => {
+      await queryClient.cancelQueries({ queryKey: deckKeys.detail(deckId) });
+      const previous = queryClient.getQueryData<DeckDetail>(deckKeys.detail(deckId));
+      patchCachedNotes(queryClient, deckId, (notes) => notes.filter((note) => note.id !== noteId));
+      return { previous };
+    },
+    onError: (_error, _noteId, context) => {
+      if (context?.previous) queryClient.setQueryData(deckKeys.detail(deckId), context.previous);
+    },
+    onSettled: () => queryClient.invalidateQueries({ queryKey: deckKeys.detail(deckId) }),
+  });
+}
+
+/**
+ * Hand one note to the agent as an instruction and let it rewrite that slide.
+ * The note is ticked off server-side once the new wording lands.
+ */
+export function useApplyNote(deckId: string) {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: ({ slideId, noteId }: { slideId: string; noteId: string }) =>
+      request<{ id: string }>(`/api/decks/${deckId}/slides/${slideId}/rewrite`, {
+        method: "POST",
+        body: JSON.stringify({ noteId }),
+      }),
     onSettled: () => queryClient.invalidateQueries({ queryKey: deckKeys.detail(deckId) }),
   });
 }

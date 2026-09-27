@@ -1,7 +1,8 @@
 # PitchPress
 
 Write one sentence about a startup idea. An AI agent writes the pitch deck, illustrates every slide,
-and you present it full screen — watching each step of the job as it runs.
+and you present it full screen — watching each step of the job as it runs. Whatever the room asks for
+during that presentation is captured on the slide it belongs to, and the agent can apply it afterwards.
 
 ```
 idea → Inngest job → OpenAI agent (guardrails) → image per slide → ImageKit → Postgres → present
@@ -122,12 +123,13 @@ and are invisible in the UI.
 | `save-slide-n` | delete-then-create in one transaction, so a retry can't duplicate a slide |
 | `mark-complete` | status `COMPLETE` |
 
-A second function, `regenerate-slide-image.ts`, handles one slide on its own and listens to the same
-`deck/cancel` event.
+Two smaller functions handle one slide on their own and listen to the same `deck/cancel` event:
+`regenerate-slide-image.ts` (a new picture) and `rewrite-slide-text.ts` (new wording, from one piece of
+feedback). Neither one touches the rest of the deck.
 
 Things that would otherwise waste money or hang are non-retriable: a missing `OPENAI_API_KEY`,
 a guardrail block, and a deck (or slide) deleted mid-run. Deleting a deck sends `deck/cancel`, which stops
-both functions through their `cancelOn`.
+all three functions through their `cancelOn`.
 
 ## Editing and re-illustrating
 
@@ -140,6 +142,32 @@ re-illustrates just that slide from its current prompt — so you can fix one ba
 the deck. The slide carries its own `imageStatus` (`READY` / `GENERATING` / `FAILED`); the UI keeps polling
 while any slide is mid-regeneration, and the old image stays on screen until the new one is saved. Each
 upload gets a fresh file name, so no browser ever shows a stale cached image.
+
+## Feedback from the room
+
+A deck is rarely right the first time — the useful part is what people say while you present it.
+
+While presenting:
+
+| Key | What it captures |
+|---|---|
+| `N` | opens a note box on the current slide. `Enter` saves, `Shift`+`Enter` adds a line, `Esc` cancels |
+| `M` | flags the slide without typing — one keypress, fill in the detail after the meeting |
+
+The note box owns the keyboard while it is open, so arrow keys, `H` and `F` can't fire mid-sentence and
+`Esc` closes the box rather than the presentation. Confirmation appears immediately rather than after the
+round trip, so nothing gets pressed twice in front of a room.
+
+Back in the deck, **Feedback from the room** lists every note under its slide: tick one off, edit it,
+delete it, or click the slide heading to bring it up in the viewer. A flag with no detail reads
+*"Flagged — no detail yet"* until you add it.
+
+**Apply with AI** hands one note to the agent as an instruction and queues `slide/rewrite-text`, which
+rewrites *that slide only* — the same per-slide shape as image regeneration. The agent is told to change
+only what the feedback asks for and never to invent figures it wasn't given, so "they want India-only
+numbers" rewrites the bullet and leaves a placeholder rather than a made-up total. The slide carries its
+own `textStatus` (`READY` / `REWRITING` / `FAILED`), the note is ticked off once the new wording lands,
+and a failed attempt keeps the old wording and says so.
 
 ## Export
 
@@ -165,6 +193,10 @@ All deck routes need a Clerk session token and only ever touch the caller's own 
 | `DELETE` | `/api/decks/:id` | stop the run if any, then delete deck + slides |
 | `PATCH` | `/api/decks/:deckId/slides/:slideId` | edit title / content / image prompt |
 | `POST` | `/api/decks/:deckId/slides/:slideId/regenerate-image` | queue a new image for one slide |
+| `POST` | `/api/decks/:deckId/slides/:slideId/notes` | capture feedback on a slide (empty body = a flag) |
+| `PATCH` | `/api/decks/:deckId/notes/:noteId` | edit a note's text or tick it off |
+| `DELETE` | `/api/decks/:deckId/notes/:noteId` | remove a note |
+| `POST` | `/api/decks/:deckId/slides/:slideId/rewrite` | apply one note — the agent rewrites that slide |
 | `GET` | `/api/decks/:id/export?format=pptx\|pdf` | download the deck as a file |
 | `GET` | `/health` | no auth |
 | `ALL` | `/api/inngest` | Inngest's own endpoint, no auth |
@@ -179,7 +211,9 @@ Open a deck and press **Present**:
 | `←` | previous slide |
 | `H` | highlighter — dims everything except a circle around the cursor (scroll to resize) |
 | `F` | toggle full screen |
-| `Esc` | leave |
+| `N` | write a note on this slide |
+| `M` | flag this slide, no typing |
+| `Esc` | close the note box, or leave the presentation |
 
 ## Troubleshooting
 
@@ -193,3 +227,6 @@ Open a deck and press **Present**:
 | Images cost too much while testing | set `USE_PLACEHOLDER_IMAGES=true` (free stock photos; slide text still uses OpenAI) |
 | "Regenerate image" fails instantly | Inngest dev server isn't running; the slide shows `couldn't re-illustrate` and keeps its old image |
 | Export says the deck has no slides | generation hasn't produced any slide yet (409) |
+| "Apply with AI" says nothing to apply | the note is still an empty flag — add the detail first (409) |
+| Slide shows `couldn't rewrite this slide` | the rewrite failed; the old wording is kept, press Apply again |
+| Every DB query fails with `ETIMEDOUT` | the machine has no IPv6 route but the database host publishes AAAA records — `src/index.js` disables Node's address auto-selection for this |

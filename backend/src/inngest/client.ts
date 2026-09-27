@@ -17,6 +17,13 @@ export type InngestEvents = {
       slideId: string;
     };
   };
+  "slide/rewrite-text": {
+    data: {
+      deckId: string;
+      slideId: string;
+      noteId: string;
+    };
+  };
 };
 
 export const inngest = new Inngest({

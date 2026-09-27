@@ -1,13 +1,20 @@
 import "dotenv/config";
+import { setDefaultAutoSelectFamily } from "node:net";
+
 import express from "express";
 import { serve } from "inngest/express";
 
 import { warnIfClerkMissing } from "./lib/auth.ts";
 import { inngest } from "./inngest/client.ts";
-import { generateDeck, regenerateSlideImage } from "./inngest/functions/index.ts";
+import { generateDeck, regenerateSlideImage, rewriteSlideText } from "./inngest/functions/index.ts";
 import { decksRouter } from "./routes/decks.ts";
 
-const functions = [generateDeck, regenerateSlideImage];
+// Neon's host publishes AAAA records. On a machine without an IPv6 route Node's
+// happy-eyeballs stalls until ETIMEDOUT instead of falling back, so every query
+// fails; pinning to the addresses that actually resolve keeps the DB reachable.
+setDefaultAutoSelectFamily(false);
+
+const functions = [generateDeck, regenerateSlideImage, rewriteSlideText];
 
 const app = express();
 

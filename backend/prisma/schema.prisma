@@ -21,6 +21,13 @@ enum SlideImageStatus {
   FAILED
 }
 
+/// Per-slide text state, so one slide can be rewritten from feedback on its own
+enum SlideTextStatus {
+  READY
+  REWRITING
+  FAILED
+}
+
 enum DeckStatus {
   PENDING
   GENERATING
@@ -53,7 +60,22 @@ model Slide {
   imagePrompt String   @db.Text
   imageUrl    String?
   imageStatus SlideImageStatus @default(READY)
+  textStatus  SlideTextStatus  @default(READY)
   createdAt   DateTime @default(now())
+  notes       SlideNote[]
 
   @@index([deckId])
+}
+
+/// Feedback captured on one slide, usually while presenting to a room.
+/// An empty body is a quick flag — "come back to this slide" — filled in later.
+model SlideNote {
+  id        String   @id @default(cuid())
+  slideId   String
+  slide     Slide    @relation(fields: [slideId], references: [id], onDelete: Cascade)
+  body      String   @default("") @db.Text
+  resolved  Boolean  @default(false)
+  createdAt DateTime @default(now())
+
+  @@index([slideId])
 }

@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 
+import { useAddNote } from "../lib/api.ts";
 import { toBullets } from "../lib/format.ts";
 import { exitFullscreen, requestFullscreen } from "../lib/fullscreen.ts";
 import type { Slide } from "../lib/types.ts";
@@ -9,6 +10,7 @@ const MAX_RADIUS = 520;
 const CONTROLS_HIDE_MS = 2600;
 
 type Props = {
+  deckId: string;
   slides: Slide[];
   startIndex: number;
   deckTitle: string;
@@ -19,24 +21,49 @@ type Props = {
  * Full-screen presentation for a meeting demo.
  *
  * Keys: → / Space next · ← previous · H highlighter · F fullscreen · Esc exit
+ * N writes a note on the slide (Alt+N closes it), M flags it without typing — both are for
+ * catching feedback from the room without leaving the presentation.
  * Highlighter dims the slide and keeps a bright circle around the cursor;
  * the scroll wheel resizes that circle.
  */
-export function PresentMode({ slides, startIndex, deckTitle, onExit }: Props) {
+export function PresentMode({ deckId, slides, startIndex, deckTitle, onExit }: Props) {
   const stageRef = useRef<HTMLDivElement>(null);
   const wasFullscreen = useRef(false);
   const [index, setIndex] = useState(startIndex);
   const [spotlight, setSpotlight] = useState(false);
   const [radius, setRadius] = useState(200);
   const [controlsVisible, setControlsVisible] = useState(true);
+  // null = closed. A string (even empty) means the note box is open.
+  const [noteDraft, setNoteDraft] = useState<string | null>(null);
+  // Wrapped in an object so the same message twice still restarts the timer
+  const [flash, setFlash] = useState<{ text: string } | null>(null);
   const [isFullscreen, setIsFullscreen] = useState(() => document.fullscreenElement !== null);
 
   const count = slides.length;
   // Slides can still be arriving while presenting, and a re-run can shrink the list
   const position = Math.max(0, Math.min(index, count - 1));
   const slide = slides[position];
+  const slideId = slide?.id;
+  const noteOpen = noteDraft !== null;
+
+  const { mutate: saveNote } = useAddNote(deckId);
 
   const exit = useCallback(() => onExit(position), [onExit, position]);
+
+  // An empty body is a flag — "come back to this slide" — filled in after the meeting
+  const capture = useCallback(
+    (body: string) => {
+      if (!slideId) return;
+      // Confirm straight away: the round trip takes over a second, and a silent
+      // pause in front of a room reads as "it didn't work" and gets pressed twice.
+      setFlash({ text: body ? "Noted" : "Flagged" });
+      saveNote(
+        { slideId, body },
+        { onError: () => setFlash({ text: "Couldn't save that — check the connection" }) },
+      );
+    },
+    [saveNote, slideId],
+  );
 
   const goTo = useCallback(
     (next: number) => setIndex(Math.max(0, Math.min(next, count - 1))),
@@ -75,6 +102,23 @@ export function PresentMode({ slides, startIndex, deckTitle, onExit }: Props) {
 
   useEffect(() => {
     function onKey(event: KeyboardEvent) {
+      const target = event.target;
+      const typing = target instanceof HTMLTextAreaElement || target instanceof HTMLInputElement;
+
+      // While the note box is open it owns the keyboard, so no shortcut steals a
+      // letter being typed. Alt+N closes the box; Esc still leaves the presentation,
+      // because in fullscreen the browser takes Esc and would end it anyway.
+      // `code`, not `key`: on a Mac Option+N is a dead key, so `key` isn't "n".
+      if (noteOpen) {
+        if (event.key === "Escape") exit();
+        else if (event.altKey && event.code === "KeyN") {
+          event.preventDefault();
+          setNoteDraft(null);
+        }
+        return;
+      }
+      if (typing) return;
+
       switch (event.key) {
         case "ArrowRight":
         case "PageDown":
@@ -104,12 +148,22 @@ export function PresentMode({ slides, startIndex, deckTitle, onExit }: Props) {
         case "End":
           goTo(count - 1);
           break;
+        case "n":
+        case "N":
+          // Keep the letter out of the box that is about to take focus
+          event.preventDefault();
+          setNoteDraft("");
+          break;
+        case "m":
+        case "M":
+          capture("");
+          break;
       }
     }
 
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [count, exit, goTo, position]);
+  }, [capture, count, exit, goTo, noteOpen, position]);
 
   // Controls fade away while you talk, and come back on any mouse move
   useEffect(() => {
@@ -117,6 +171,27 @@ export function PresentMode({ slides, startIndex, deckTitle, onExit }: Props) {
     const timer = window.setTimeout(() => setControlsVisible(false), CONTROLS_HIDE_MS);
     return () => window.clearTimeout(timer);
   }, [controlsVisible, position]);
+
+  // Confirmation is deliberately brief — it must not cover the slide for long
+  useEffect(() => {
+    if (!flash) return;
+    const timer = window.setTimeout(() => setFlash(null), 1600);
+    return () => window.clearTimeout(timer);
+  }, [flash]);
+
+  function commitNote() {
+    const body = (noteDraft ?? "").trim();
+    setNoteDraft(null);
+    if (body) capture(body);
+  }
+
+  function handleNoteKey(event: React.KeyboardEvent<HTMLTextAreaElement>) {
+    // Shift+Enter keeps the newline, plain Enter saves and gets back to the slide
+    if (event.key === "Enter" && !event.shiftKey) {
+      event.preventDefault();
+      commitNote();
+    }
+  }
 
   function toggleFullscreen() {
     if (document.fullscreenElement) exitFullscreen();
@@ -181,6 +256,34 @@ export function PresentMode({ slides, startIndex, deckTitle, onExit }: Props) {
       {/* Dim layer with a hole around the cursor — pointer-events: none so clicks pass through */}
       {spotlight && <div className="spotlight" aria-hidden />}
 
+      {flash && (
+        <div className="present-flash" role="status">
+          {flash.text}
+        </div>
+      )}
+
+      {noteOpen && (
+        <div className="present-note">
+          <label className="present-note-label mono" htmlFor="present-note">
+            Note on {String(position + 1).padStart(2, "0")} · {slide.title}
+          </label>
+          <textarea
+            id="present-note"
+            className="present-note-input"
+            rows={3}
+            maxLength={500}
+            autoFocus
+            placeholder="What did the room ask for?"
+            value={noteDraft ?? ""}
+            onChange={(event) => setNoteDraft(event.target.value)}
+            onKeyDown={handleNoteKey}
+          />
+          <p className="present-note-hint mono">
+            <kbd>Enter</kbd> save · <kbd>Alt</kbd>+<kbd>N</kbd> close · <kbd>Shift</kbd>+<kbd>Enter</kbd> new line
+          </p>
+        </div>
+      )}
+
       <div className="present-progress" aria-hidden>
         <span style={{ width: `${((position + 1) / count) * 100}%` }} />
       </div>
@@ -214,6 +317,25 @@ export function PresentMode({ slides, startIndex, deckTitle, onExit }: Props) {
         </button>
         <button type="button" className="present-button present-wide" onClick={toggleFullscreen}>
           {isFullscreen ? "Exit full screen" : "Full screen"} <kbd>F</kbd>
+        </button>
+        <button
+          type="button"
+          className="present-button present-wide"
+          data-on={noteOpen}
+          onClick={() => setNoteDraft(noteOpen ? null : "")}
+          title="Write down feedback on this slide"
+        >
+          Note
+          {slide.notes.length > 0 && <span className="present-note-count">{slide.notes.length}</span>}
+          <kbd>N</kbd>
+        </button>
+        <button
+          type="button"
+          className="present-button present-wide"
+          onClick={() => capture("")}
+          title="Flag this slide to come back to — no typing"
+        >
+          Flag <kbd>M</kbd>
         </button>
         <button type="button" className="present-button present-wide" onClick={exit}>
           Close <kbd>Esc</kbd>

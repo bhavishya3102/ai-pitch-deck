@@ -121,6 +121,7 @@ export function SlideViewer({ deckId, slides, generating, index, onIndexChange, 
           <span className="mono muted">
             {String(current.order).padStart(2, "0")} / {String(count).padStart(2, "0")}
             {generating && " · more coming"}
+            {current.textStatus === "REWRITING" && " · rewriting from feedback"}
           </span>
 
           {editing ? (

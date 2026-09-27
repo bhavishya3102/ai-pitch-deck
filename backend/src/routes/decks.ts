@@ -15,6 +15,17 @@ const SlideEditSchema = SlideSchema.partial().refine(
   "Nothing to update",
 );
 
+/** A note may start empty — that is a "come back to this slide" flag from a live demo. */
+const NoteSchema = z.object({
+  body: z.string().max(500).optional(),
+  resolved: z.boolean().optional(),
+});
+
+const NoteEditSchema = NoteSchema.refine(
+  (value) => Object.keys(value).length > 0,
+  "Nothing to update",
+);
+
 export const decksRouter = Router();
 
 // Every route below belongs to the signed-in user only
@@ -152,6 +163,123 @@ decksRouter.post("/:deckId/slides/:slideId/regenerate-image", async (req, res) =
   res.status(202).json({ id: slide.id });
 });
 
+/** Capture feedback on a slide. Sent mid-presentation, so it must be cheap and never fail loudly. */
+decksRouter.post("/:deckId/slides/:slideId/notes", async (req, res) => {
+  const parsed = NoteSchema.safeParse(req.body ?? {});
+
+  if (!parsed.success) {
+    res.status(400).json({ error: z.prettifyError(parsed.error) });
+    return;
+  }
+
+  // Ownership lives on the deck, so check the slide through it
+  const slide = await prisma.slide.findFirst({
+    where: { id: req.params.slideId, deck: { id: req.params.deckId, userId: req.userId } },
+    select: { id: true },
+  });
+
+  if (!slide) {
+    res.status(404).json({ error: "Slide not found" });
+    return;
+  }
+
+  const note = await prisma.slideNote.create({
+    data: { slideId: slide.id, body: parsed.data.body?.trim() ?? "" },
+  });
+
+  res.status(201).json({ id: note.id });
+});
+
+/** Fill in a flag's detail after the meeting, or tick it off once it's handled. */
+decksRouter.patch("/:deckId/notes/:noteId", async (req, res) => {
+  const parsed = NoteEditSchema.safeParse(req.body ?? {});
+
+  if (!parsed.success) {
+    res.status(400).json({ error: z.prettifyError(parsed.error) });
+    return;
+  }
+
+  const { body, resolved } = parsed.data;
+  const { count } = await prisma.slideNote.updateMany({
+    where: { id: req.params.noteId, slide: { deck: { id: req.params.deckId, userId: req.userId } } },
+    data: { ...(body === undefined ? {} : { body: body.trim() }), ...(resolved === undefined ? {} : { resolved }) },
+  });
+
+  if (count === 0) {
+    res.status(404).json({ error: "Note not found" });
+    return;
+  }
+
+  res.status(204).end();
+});
+
+decksRouter.delete("/:deckId/notes/:noteId", async (req, res) => {
+  const { count } = await prisma.slideNote.deleteMany({
+    where: { id: req.params.noteId, slide: { deck: { id: req.params.deckId, userId: req.userId } } },
+  });
+
+  if (count === 0) {
+    res.status(404).json({ error: "Note not found" });
+    return;
+  }
+
+  res.status(204).end();
+});
+
+/**
+ * Apply one note to its slide: the agent rewrites the words from that feedback,
+ * and the note is ticked off once it lands.
+ */
+decksRouter.post("/:deckId/slides/:slideId/rewrite", async (req, res) => {
+  const noteId = typeof req.body?.noteId === "string" ? req.body.noteId : "";
+
+  if (!noteId) {
+    res.status(400).json({ error: "noteId is required" });
+    return;
+  }
+
+  // One lookup proves the note, its slide and the deck all belong to this user
+  const note = await prisma.slideNote.findFirst({
+    where: {
+      id: noteId,
+      slideId: req.params.slideId,
+      slide: { deck: { id: req.params.deckId, userId: req.userId } },
+    },
+    select: { id: true, body: true },
+  });
+
+  if (!note) {
+    res.status(404).json({ error: "Note not found" });
+    return;
+  }
+
+  if (!note.body.trim()) {
+    res.status(409).json({ error: "Write what needs to change before applying it." });
+    return;
+  }
+
+  // Mark first, so the UI shows the slide is being rewritten even before Inngest starts
+  await prisma.slide.update({
+    where: { id: req.params.slideId },
+    data: { textStatus: "REWRITING" },
+  });
+
+  try {
+    await inngest.send({
+      name: "slide/rewrite-text",
+      data: { deckId: req.params.deckId, slideId: req.params.slideId, noteId: note.id },
+    });
+  } catch (error) {
+    await prisma.slide.update({ where: { id: req.params.slideId }, data: { textStatus: "FAILED" } });
+    const reason = error instanceof Error ? error.message : String(error);
+    console.warn(`Could not queue slide/rewrite-text for ${req.params.slideId}:`, reason);
+    res.status(502).json({ error: "Could not reach Inngest. Is the Inngest dev server running?" });
+    return;
+  }
+
+  res.status(202).json({ id: req.params.slideId });
+});
+
 /** Download the deck as .pptx or .pdf. */
 decksRouter.get("/:id/export", async (req, res) => {
   const format = req.query.format === "pdf" ? "pdf" : req.query.format === "pptx" ? "pptx" : null;
@@ -200,7 +328,9 @@ decksRouter.get("/:id/export", async (req, res) => {
 decksRouter.get("/:id", async (req, res) => {
   const deck = await prisma.deck.findFirst({
     where: { id: req.params.id, userId: req.userId },
-    include: { slides: { orderBy: { order: "asc" } } },
+    include: {
+      slides: { orderBy: { order: "asc" }, include: { notes: { orderBy: { createdAt: "asc" } } } },
+    },
   });
 
   if (!deck) {
@@ -214,7 +344,7 @@ decksRouter.get("/:id", async (req, res) => {
     title: deck.title,
     status: deck.status,
     errorMessage: deck.errorMessage,
-    slides: deck.slides.map(({ id, order, title, content, imagePrompt, imageUrl, imageStatus }) => ({
+    slides: deck.slides.map(({ id, order, title, content, imagePrompt, imageUrl, imageStatus, textStatus, notes }) => ({
       id,
       order,
       title,
@@ -222,6 +352,13 @@ decksRouter.get("/:id", async (req, res) => {
       imagePrompt,
       imageUrl,
       imageStatus,
+      textStatus,
+      notes: notes.map((note) => ({
+        id: note.id,
+        body: note.body,
+        resolved: note.resolved,
+        createdAt: note.createdAt.toISOString(),
+      })),
     })),
     createdAt: deck.createdAt.toISOString(),
     updatedAt: deck.updatedAt.toISOString(),
