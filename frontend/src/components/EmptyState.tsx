@@ -12,8 +12,9 @@ export function EmptyState() {
           <em>A whole deck</em> out.
         </h1>
         <p className="empty-lede">
-          Write your startup idea on the left. An Inngest job picks it up, an OpenAI agent writes the slides, every
-          slide gets its own image on ImageKit, and you can watch each step happen here.
+          Write what you're presenting on the left, and pick who it is for. An Inngest job picks it up, an OpenAI
+          agent writes the slides, every slide gets its own image on ImageKit, and you can watch each step happen
+          here.
         </p>
       </div>
       <div className="empty-pipeline">

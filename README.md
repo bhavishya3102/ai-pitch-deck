@@ -1,8 +1,9 @@
 # PitchPress
 
-Write one sentence about a startup idea. An AI agent writes the pitch deck, illustrates every slide,
-and you present it full screen — watching each step of the job as it runs. Whatever the room asks for
-during that presentation is captured on the slide it belongs to, and the agent can apply it afterwards.
+Write one sentence about what you're presenting. An AI agent writes the deck for the audience you pick,
+illustrates every slide, and you present it full screen — watching each step of the job as it runs.
+Whatever the room asks for during that presentation is captured on the slide it belongs to, and the
+agent can apply it afterwards.
 
 ```
 idea → Inngest job → OpenAI agent (guardrails) → image per slide → ImageKit → Postgres → present
@@ -110,6 +111,30 @@ and `/api/decks` answers `503` with the reason. `/health` and the Inngest endpoi
 Decks created before auth existed were kept and marked `legacy-unclaimed` — they belong to no account
 and are invisible in the UI.
 
+## Deck options
+
+The composer sets three things before the agent runs, and they are saved on the deck so a
+re-run produces the same kind of deck:
+
+| Option | Choices | What it changes |
+|---|---|---|
+| **For** | Investors · Team · Customers | who the agent writes to, and the slide arc it follows |
+| **Tone** | Confident · Plain · Bold | how the sentences read |
+| **Slides** | 5 · 7 · 10 | how long the deck is |
+
+Each audience has its own arc — investors get *Problem · Solution · Market · Business Model · The Ask*,
+the team gets *Context · What we're building · Why now · The plan · What we need*, customers get
+*The problem you have · What it does · How it works · Pricing · Get started* — and the agent stretches
+or merges those headings to land on the chosen length.
+
+The landing page keeps its single CTA and uses the defaults (investors, confident, 7 slides), which is
+exactly what the app produced before options existed. Existing decks were backfilled with the same
+defaults, so nothing re-reads differently.
+
+> OpenAI's structured output can't enforce array length, so the schema accepts one slide either side of
+> the number you picked. That only stops a near miss from throwing away a finished deck — the deck header
+> always reports the slides that actually exist.
+
 ## How generation works
 
 `backend/src/inngest/functions/generate-deck.ts` — each step is retryable and visible in the Inngest UI:
@@ -118,7 +143,7 @@ and are invisible in the UI.
 |---|---|
 | `load-deck` | find the idea in Postgres |
 | `mark-generating` | set status, clear slides from a previous run |
-| `run-agent` | agent writes the slides; guardrails check input and output |
+| `run-agent` | agent (built from the deck's audience, tone and length) writes the slides; guardrails check input and output |
 | `image-n` | generate the image → upload to ImageKit → return the URL |
 | `save-slide-n` | delete-then-create in one transaction, so a retry can't duplicate a slide |
 | `mark-complete` | status `COMPLETE` |
@@ -187,7 +212,7 @@ All deck routes need a Clerk session token and only ever touch the caller's own 
 
 | Method | Path | Purpose |
 |---|---|---|
-| `POST` | `/api/decks` | create a deck and queue the job (idea ≥ 20 characters) |
+| `POST` | `/api/decks` | create a deck and queue the job — `{ idea, audience?, tone?, slideCount? }`, idea ≥ 20 characters |
 | `GET` | `/api/decks` | list your decks |
 | `GET` | `/api/decks/:id` | one deck with slides (the UI polls this) |
 | `DELETE` | `/api/decks/:id` | stop the run if any, then delete deck + slides |
@@ -228,5 +253,7 @@ Open a deck and press **Present**:
 | "Regenerate image" fails instantly | Inngest dev server isn't running; the slide shows `couldn't re-illustrate` and keeps its old image |
 | Export says the deck has no slides | generation hasn't produced any slide yet (409) |
 | "Apply with AI" says nothing to apply | the note is still an empty flag — add the detail first (409) |
+| Deck creation returns 400 on `audience` / `tone` / `slideCount` | only the listed choices are accepted — see **Deck options** |
+| Deck came out one slide short or long | within the tolerance the schema allows; the header shows the real count |
 | Slide shows `couldn't rewrite this slide` | the rewrite failed; the old wording is kept, press Apply again |
 | Every DB query fails with `ETIMEDOUT` | the machine has no IPv6 route but the database host publishes AAAA records — `src/index.js` disables Node's address auto-selection for this |

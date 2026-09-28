@@ -1,7 +1,15 @@
 import { useMutation, useQuery, useQueryClient, type QueryClient } from "@tanstack/react-query";
 
 import { authHeader } from "./auth-token.ts";
-import { hasSlideInProgress, isFinished, type DeckDetail, type DeckListItem, type SlideNote } from "./types.ts";
+import {
+  hasSlideInProgress,
+  isFinished,
+  type DeckAudience,
+  type DeckDetail,
+  type DeckListItem,
+  type DeckTone,
+  type SlideNote,
+} from "./types.ts";
 
 export class ApiError extends Error {
   readonly status: number;
@@ -263,14 +271,22 @@ export function useExportDeck(deckId: string) {
   });
 }
 
+/** Options are optional — the landing page sends only an idea and takes the defaults. */
+export type NewDeck = {
+  idea: string;
+  audience?: DeckAudience;
+  tone?: DeckTone;
+  slideCount?: number;
+};
+
 export function useCreateDeck() {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: (idea: string) =>
+    mutationFn: (deck: NewDeck) =>
       request<{ id: string }>("/api/decks", {
         method: "POST",
-        body: JSON.stringify({ idea }),
+        body: JSON.stringify(deck),
       }),
     // Refresh the list either way — a failed queue still creates a (FAILED) deck
     onSettled: () => queryClient.invalidateQueries({ queryKey: deckKeys.all }),

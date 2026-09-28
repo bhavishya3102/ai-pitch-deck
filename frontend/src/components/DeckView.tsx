@@ -1,6 +1,7 @@
 import { useState } from "react";
 
 import { ApiError, useDeck, useExportDeck } from "../lib/api.ts";
+import { describeOptions } from "../lib/deck-options.ts";
 import { duration } from "../lib/format.ts";
 import { requestFullscreen } from "../lib/fullscreen.ts";
 import { useNow } from "../lib/hooks.ts";
@@ -86,6 +87,7 @@ export function DeckView({ deckId, onDeleted }: Props) {
           {deck.title ?? <em className="writing">{running ? "Writing the deck…" : "Untitled deck"}</em>}
         </h1>
         <p className="deck-idea">“{deck.idea}”</p>
+        <p className="deck-options mono muted">{describeOptions(deck)}</p>
         {exportDeck.isError && (
           <p className="form-error" role="alert">
             {exportDeck.error.message}

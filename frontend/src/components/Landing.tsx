@@ -16,12 +16,12 @@ const STEPS = [
   {
     step: 'inngest.send("deck/generate")',
     title: "You write one sentence",
-    body: "No outline, no slide count, no template gallery. Just the idea, the way you would say it out loud.",
+    body: "No outline, no template gallery. Just the idea the way you would say it out loud, and who it is for.",
   },
   {
     step: 'step.run("run-agent")',
     title: "The agent writes the deck",
-    body: "Problem, solution, market, product, business model, the ask. Guardrails check the draft before anything is saved.",
+    body: "The slide arc that fits your audience — investors, your own team, or customers. Guardrails check the draft before anything is saved.",
   },
   {
     step: 'step.run("image-n")',
@@ -94,7 +94,8 @@ export function Landing({ isSignedIn, onStart, onCreated, onSignIn }: Props) {
       return;
     }
 
-    createDeck.mutate(idea.trim(), {
+    // Landing stays one focused CTA — options keep their defaults here
+    createDeck.mutate({ idea: idea.trim() }, {
       onSuccess: ({ id }) => onCreated(id),
       onError: (error) => {
         // The deck was saved but the job could not be queued — open it so the reason shows
@@ -136,18 +137,19 @@ export function Landing({ isSignedIn, onStart, onCreated, onSignIn }: Props) {
           <h1 className="hero-title">
             Your idea,
             <br />
-            <em>printed</em> as a pitch deck.
+            <em>printed</em> as a deck.
           </h1>
 
           <p className="hero-lede">
-            Describe your startup in a line. An AI agent writes the slides, illustrates every one of them, and hands
-            you a deck you can put on the projector — in about a minute.
+            Describe what you're presenting in a line. An AI agent writes and illustrates every slide. Present it
+            full screen, and whatever the room asks for lands on the slide it belongs to — for the agent to rewrite
+            afterwards.
           </p>
 
           {/* The single call to action: the product itself, right here */}
           <form className="hero-form" onSubmit={submit}>
             <label className="sr-only" htmlFor="landing-idea">
-              Describe your startup idea
+              Describe what you're presenting
             </label>
             <div className="hero-field" data-error={createDeck.isError}>
               <textarea
@@ -214,7 +216,7 @@ export function Landing({ isSignedIn, onStart, onCreated, onSignIn }: Props) {
             </div>
             <div>
               <dt className="mono">7</dt>
-              <dd>investor-ready slides</dd>
+              <dd>slides ready for the room you're in</dd>
             </div>
             <div>
               <dt className="mono">0</dt>

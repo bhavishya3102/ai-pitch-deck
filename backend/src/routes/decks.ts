@@ -6,6 +6,7 @@ import { authGuard } from "../lib/auth.ts";
 import { inngest } from "../inngest/client.ts";
 import { buildPdf, buildPptx, toFileName, type ExportDeck } from "../lib/export.ts";
 import { prisma } from "../lib/prisma.js";
+import { DeckOptionsSchema } from "../schemas/deck-options.ts";
 import { SlideSchema } from "../schemas/pitch-deck.ts";
 import type { DeckDetail, DeckListItem } from "../types/deck.ts";
 
@@ -41,7 +42,17 @@ decksRouter.post("/", async (req, res) => {
     return;
   }
 
-  const deck = await prisma.deck.create({ data: { idea, userId: req.userId } });
+  // Every option has a default, so a request with only an idea still works
+  const options = DeckOptionsSchema.safeParse(req.body ?? {});
+
+  if (!options.success) {
+    res.status(400).json({ error: z.prettifyError(options.error) });
+    return;
+  }
+
+  const deck = await prisma.deck.create({
+    data: { idea, userId: req.userId, ...options.data },
+  });
 
   try {
     await inngest.send({ name: "deck/generate", data: { deckId: deck.id } });
@@ -343,6 +354,9 @@ decksRouter.get("/:id", async (req, res) => {
     idea: deck.idea,
     title: deck.title,
     status: deck.status,
+    audience: deck.audience,
+    tone: deck.tone,
+    slideCount: deck.slideCount,
     errorMessage: deck.errorMessage,
     slides: deck.slides.map(({ id, order, title, content, imagePrompt, imageUrl, imageStatus, textStatus, notes }) => ({
       id,

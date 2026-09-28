@@ -2,6 +2,10 @@
 
 export type DeckStatus = "PENDING" | "GENERATING" | "COMPLETE" | "FAILED";
 
+export type DeckAudience = "INVESTOR" | "TEAM" | "CUSTOMER";
+
+export type DeckTone = "CONFIDENT" | "PLAIN" | "BOLD";
+
 export type SlideImageStatus = "READY" | "GENERATING" | "FAILED";
 
 export type SlideTextStatus = "READY" | "REWRITING" | "FAILED";
@@ -31,6 +35,9 @@ export type DeckDetail = {
   idea: string;
   title: string | null;
   status: DeckStatus;
+  audience: DeckAudience;
+  tone: DeckTone;
+  slideCount: number;
   errorMessage: string | null;
   slides: Slide[];
   createdAt: string;

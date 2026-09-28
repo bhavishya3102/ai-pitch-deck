@@ -47,12 +47,13 @@ export function AuthPage({ mode, onHome }: Props) {
           <h1 className="auth-headline">
             Your idea,
             <br />
-            <em>printed</em> as a pitch deck.
+            <em>printed</em> as a deck.
           </h1>
           <ul className="auth-points">
-            <li>One sentence in, seven illustrated slides out</li>
-            <li>Watch every step of the job as it runs</li>
+            <li>One sentence in, a full illustrated deck out</li>
+            <li>Written for investors, your own team, or your customers</li>
             <li>Present full screen, with a highlighter for the room</li>
+            <li>Notes from the room land on the slide, for the agent to apply</li>
           </ul>
         </div>
 

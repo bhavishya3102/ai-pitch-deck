@@ -57,7 +57,11 @@ export const generateDeck = inngest.createFunction(
         }
 
         try {
-          return await generatePitchDeck(deck.idea);
+          return await generatePitchDeck(deck.idea, {
+            audience: deck.audience,
+            tone: deck.tone,
+            slideCount: deck.slideCount,
+          });
         } catch (error) {
           // A guardrail block won't pass on retry — stop here instead of paying for more attempts
           if (error instanceof PitchDeckGenerationError) {

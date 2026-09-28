@@ -288,6 +288,62 @@ p {
   color: var(--success);
 }
 
+/* Audience, tone and length — chosen per deck, defaults match the old behaviour */
+.composer-options {
+  display: flex;
+  flex-direction: column;
+  gap: 9px;
+  margin-top: 16px;
+  padding-top: 14px;
+  border-top: 1px dashed var(--rule);
+}
+
+.option-row {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.option-label {
+  min-width: 44px;
+  margin-bottom: 0;
+  font-size: 10px;
+}
+
+.option-choices {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.option {
+  padding: 4px 11px;
+  border: 1px solid var(--rule);
+  border-radius: 999px;
+  background: var(--card);
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--ink-soft);
+  transition: border-color 0.2s, background 0.2s, color 0.2s;
+}
+
+.option:hover {
+  border-color: var(--ink);
+  color: var(--ink);
+}
+
+.option[data-on="true"] {
+  border-color: var(--ink);
+  background: var(--ink);
+  color: var(--paper);
+}
+
+.deck-options {
+  margin: 8px 0 0;
+  font-size: 11px;
+}
+
 /* ── Status badge ──────────────────────────────────────────── */
 
 .badge {

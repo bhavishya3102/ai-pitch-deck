@@ -28,6 +28,20 @@ enum SlideTextStatus {
   FAILED
 }
 
+/// Who the deck is being written for — changes the slide arc the agent follows
+enum DeckAudience {
+  INVESTOR
+  TEAM
+  CUSTOMER
+}
+
+/// How the deck should read
+enum DeckTone {
+  CONFIDENT
+  PLAIN
+  BOLD
+}
+
 enum DeckStatus {
   PENDING
   GENERATING
@@ -41,6 +55,11 @@ model Deck {
   userId       String
   idea         String     @db.Text
   title        String?
+  /// Generation options, chosen when the deck is created. Defaults match what
+  /// the agent used to do unconditionally, so older decks re-run the same way.
+  audience     DeckAudience @default(INVESTOR)
+  tone         DeckTone     @default(CONFIDENT)
+  slideCount   Int          @default(7)
   status       DeckStatus @default(PENDING)
   errorMessage String?
   createdAt    DateTime   @default(now())
