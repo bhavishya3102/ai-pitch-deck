@@ -53,6 +53,32 @@ export const deckKeys = {
   detail: (id: string) => ["decks", id] as const,
 };
 
+export const quotaKeys = {
+  all: ["quota"] as const,
+};
+
+/** Mirrors GET /api/decks/quota. */
+export type QuotaSnapshot = {
+  decks: { used: number; limit: number; remaining: number; resetsAt: string };
+  concurrent: { active: number; limit: number };
+  images: { used: number; limit: number; remaining: number; resetsAt: string };
+  rewrites: { used: number; limit: number; remaining: number; resetsAt: string };
+};
+
+/**
+ * Remaining allowance. A failed fetch must not disable Generate — the server
+ * still enforces the limit, and the error shows up on submit.
+ */
+export function useQuota(enabled = true) {
+  return useQuery({
+    queryKey: quotaKeys.all,
+    queryFn: () => request<QuotaSnapshot>("/api/decks/quota"),
+    enabled,
+    staleTime: 15_000,
+    retry: 1,
+  });
+}
+
 /** Deck list — keeps polling only while some deck is still being generated. */
 export function useDecks() {
   return useQuery({
@@ -108,7 +134,10 @@ export function useDeleteDeck(onDeleted: (id: string) => void) {
       queryClient.removeQueries({ queryKey: deckKeys.detail(id) });
       onDeleted(id);
     },
-    onSettled: () => queryClient.invalidateQueries({ queryKey: deckKeys.all }),
+    onSettled: () => {
+      queryClient.invalidateQueries({ queryKey: deckKeys.all });
+      queryClient.invalidateQueries({ queryKey: quotaKeys.all });
+    },
   });
 }
 
@@ -133,7 +162,10 @@ export function useRegenerateSlideImage(deckId: string) {
   return useMutation({
     mutationFn: (slideId: string) =>
       request<{ id: string }>(`/api/decks/${deckId}/slides/${slideId}/regenerate-image`, { method: "POST" }),
-    onSettled: () => queryClient.invalidateQueries({ queryKey: deckKeys.detail(deckId) }),
+    onSettled: () => {
+      queryClient.invalidateQueries({ queryKey: deckKeys.detail(deckId) });
+      queryClient.invalidateQueries({ queryKey: quotaKeys.all });
+    },
   });
 }
 
@@ -230,7 +262,10 @@ export function useApplyNote(deckId: string) {
         method: "POST",
         body: JSON.stringify({ noteId }),
       }),
-    onSettled: () => queryClient.invalidateQueries({ queryKey: deckKeys.detail(deckId) }),
+    onSettled: () => {
+      queryClient.invalidateQueries({ queryKey: deckKeys.detail(deckId) });
+      queryClient.invalidateQueries({ queryKey: quotaKeys.all });
+    },
   });
 }
 
@@ -288,7 +323,11 @@ export function useCreateDeck() {
         method: "POST",
         body: JSON.stringify(deck),
       }),
-    // Refresh the list either way — a failed queue still creates a (FAILED) deck
-    onSettled: () => queryClient.invalidateQueries({ queryKey: deckKeys.all }),
+    // Refresh the list either way — a failed queue still creates a (FAILED) deck.
+    // Quota too: a 429 and a successful queue both change what is left.
+    onSettled: () => {
+      queryClient.invalidateQueries({ queryKey: deckKeys.all });
+      queryClient.invalidateQueries({ queryKey: quotaKeys.all });
+    },
   });
 }

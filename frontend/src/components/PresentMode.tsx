@@ -20,18 +20,24 @@ type Props = {
 /**
  * Full-screen presentation for a meeting demo.
  *
- * Keys: → / Space next · ← previous · H highlighter · F fullscreen · Esc exit
+ * Keys: → / Space next · ← previous · H highlighter · L laser · F fullscreen · Esc exit
  * N writes a note on the slide (Alt+N closes it), M flags it without typing — both are for
  * catching feedback from the room without leaving the presentation.
  * Highlighter dims the slide and keeps a bright circle around the cursor;
- * the scroll wheel resizes that circle.
+ * the scroll wheel resizes that circle. Laser leaves the slide fully lit and
+ * puts a tight dot on the word under the cursor. The two can be on together.
  */
 export function PresentMode({ deckId, slides, startIndex, deckTitle, onExit }: Props) {
   const stageRef = useRef<HTMLDivElement>(null);
   const wasFullscreen = useRef(false);
   const [index, setIndex] = useState(startIndex);
   const [spotlight, setSpotlight] = useState(false);
+  const [laser, setLaser] = useState(false);
   const [radius, setRadius] = useState(200);
+  // Last pointer position, so turning the laser on puts the dot under the cursor
+  // immediately instead of waiting for the next move. Not state: moving must not re-render.
+  const pointer = useRef({ x: 0, y: 0 });
+  const seenPointer = useRef(false);
   const [controlsVisible, setControlsVisible] = useState(true);
   // null = closed. A string (even empty) means the note box is open.
   const [noteDraft, setNoteDraft] = useState<string | null>(null);
@@ -138,6 +144,10 @@ export function PresentMode({ deckId, slides, startIndex, deckTitle, onExit }: P
         case "H":
           setSpotlight((on) => !on);
           break;
+        case "l":
+        case "L":
+          toggleLaser();
+          break;
         case "f":
         case "F":
           toggleFullscreen();
@@ -198,13 +208,28 @@ export function PresentMode({ deckId, slides, startIndex, deckTitle, onExit }: P
     else requestFullscreen();
   }
 
-  function handlePointerMove(event: React.PointerEvent<HTMLDivElement>) {
-    setControlsVisible(true);
-    if (!spotlight) return;
+  function paintPointer(x: number, y: number) {
+    seenPointer.current = true;
+    pointer.current = { x, y };
     const node = stageRef.current;
     if (!node) return;
-    node.style.setProperty("--spot-x", `${event.clientX}px`);
-    node.style.setProperty("--spot-y", `${event.clientY}px`);
+    node.style.setProperty("--spot-x", `${x}px`);
+    node.style.setProperty("--spot-y", `${y}px`);
+    node.style.setProperty("--laser-x", `${x}px`);
+    node.style.setProperty("--laser-y", `${y}px`);
+  }
+
+  function toggleLaser() {
+    // Place the dot before the element mounts, using the last move.
+    if (!laser && seenPointer.current) paintPointer(pointer.current.x, pointer.current.y);
+    setLaser((on) => !on);
+  }
+
+  function handlePointerMove(event: React.PointerEvent<HTMLDivElement>) {
+    setControlsVisible(true);
+    // Always record the point. Highlighter and laser read the same CSS variables,
+    // so turning one on later does not wait for another move.
+    paintPointer(event.clientX, event.clientY);
   }
 
   function handleWheel(event: React.WheelEvent<HTMLDivElement>) {
@@ -221,6 +246,7 @@ export function PresentMode({ deckId, slides, startIndex, deckTitle, onExit }: P
       ref={stageRef}
       className="present"
       data-spotlight={spotlight}
+      data-laser={laser}
       style={{ "--spot-r": `${radius}px` } as React.CSSProperties}
       role="dialog"
       aria-modal="true"
@@ -255,6 +281,9 @@ export function PresentMode({ deckId, slides, startIndex, deckTitle, onExit }: P
 
       {/* Dim layer with a hole around the cursor — pointer-events: none so clicks pass through */}
       {spotlight && <div className="spotlight" aria-hidden />}
+
+      {/* Tight dot for one word. Above the dim, still click-through. */}
+      {laser && <div className="laser" aria-hidden />}
 
       {flash && (
         <div className="present-flash" role="status">
@@ -314,6 +343,15 @@ export function PresentMode({ deckId, slides, startIndex, deckTitle, onExit }: P
           onClick={() => setSpotlight((on) => !on)}
         >
           Highlighter {spotlight ? "on" : "off"} <kbd>H</kbd>
+        </button>
+        <button
+          type="button"
+          className="present-button present-wide"
+          data-on={laser}
+          onClick={toggleLaser}
+          title="Point at one word. The slide stays fully lit."
+        >
+          Laser {laser ? "on" : "off"} <kbd>L</kbd>
         </button>
         <button type="button" className="present-button present-wide" onClick={toggleFullscreen}>
           {isFullscreen ? "Exit full screen" : "Full screen"} <kbd>F</kbd>

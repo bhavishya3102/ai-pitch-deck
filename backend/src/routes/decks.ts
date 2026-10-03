@@ -6,6 +6,7 @@ import { authGuard } from "../lib/auth.ts";
 import { inngest } from "../inngest/client.ts";
 import { buildPdf, buildPptx, toFileName, type ExportDeck } from "../lib/export.ts";
 import { prisma } from "../lib/prisma.js";
+import { QuotaError, readQuota, refundCharge, reserveDeck, reserveImage, reserveRewrite } from "../lib/quota.ts";
 import { DeckOptionsSchema } from "../schemas/deck-options.ts";
 import { SlideSchema } from "../schemas/pitch-deck.ts";
 import type { DeckDetail, DeckListItem } from "../types/deck.ts";
@@ -50,15 +51,29 @@ decksRouter.post("/", async (req, res) => {
     return;
   }
 
-  const deck = await prisma.deck.create({
-    data: { idea, userId: req.userId, ...options.data },
-  });
+  let deck: { id: string };
+  let chargeId: string;
+
+  try {
+    // Deck row and the monthly charge commit together. A 429 leaves nothing behind.
+    const reserved = await reserveDeck(req.userId, idea, options.data);
+    deck = reserved.deck;
+    chargeId = reserved.chargeId;
+  } catch (error) {
+    if (error instanceof QuotaError) {
+      res.status(error.status).json({ error: error.message, code: error.code });
+      return;
+    }
+    throw error;
+  }
 
   try {
     await inngest.send({ name: "deck/generate", data: { deckId: deck.id } });
   } catch (error) {
-    // Without the event no job will ever run — don't leave the deck stuck in PENDING
+    // Without the event no job will ever run — don't leave the deck stuck in PENDING,
+    // and don't spend a monthly deck on a job that never started.
     const reason = error instanceof Error ? error.message : String(error);
+    await refundCharge(chargeId);
     await prisma.deck.update({
       where: { id: deck.id },
       data: { status: "FAILED", errorMessage: `Could not queue generation job: ${reason}` },
@@ -86,6 +101,11 @@ decksRouter.get("/", async (req, res) => {
   }));
 
   res.json(items);
+});
+
+/** Decks, images and rewrites this account has left. The UI reads this before enabling Generate. */
+decksRouter.get("/quota", async (req, res) => {
+  res.json(await readQuota(req.userId));
 });
 
 /** Stop a running generation (if any) and delete the deck + its slides. */
@@ -142,36 +162,44 @@ decksRouter.patch("/:deckId/slides/:slideId", async (req, res) => {
 
 /** Re-illustrate one slide with its current image prompt. */
 decksRouter.post("/:deckId/slides/:slideId/regenerate-image", async (req, res) => {
-  const slide = await prisma.slide.findFirst({
-    where: { id: req.params.slideId, deck: { id: req.params.deckId, userId: req.userId } },
-    select: { id: true },
-  });
+  let chargeId: string;
+  let slideId: string;
 
-  if (!slide) {
-    res.status(404).json({ error: "Slide not found" });
-    return;
+  try {
+    const reserved = await reserveImage(req.userId, req.params.deckId, req.params.slideId);
+    if (!reserved.ok && reserved.reason === "missing") {
+      res.status(404).json({ error: "Slide not found" });
+      return;
+    }
+    if (!reserved.ok) {
+      res.status(409).json({ error: "This slide is already being illustrated." });
+      return;
+    }
+    chargeId = reserved.chargeId;
+    slideId = req.params.slideId;
+  } catch (error) {
+    if (error instanceof QuotaError) {
+      res.status(error.status).json({ error: error.message, code: error.code });
+      return;
+    }
+    throw error;
   }
-
-  // Mark first, so the UI shows the spinner even before Inngest picks the job up
-  await prisma.slide.update({
-    where: { id: slide.id },
-    data: { imageStatus: "GENERATING" },
-  });
 
   try {
     await inngest.send({
       name: "slide/regenerate-image",
-      data: { deckId: req.params.deckId, slideId: slide.id },
+      data: { deckId: req.params.deckId, slideId },
     });
   } catch (error) {
-    await prisma.slide.update({ where: { id: slide.id }, data: { imageStatus: "FAILED" } });
+    await refundCharge(chargeId);
+    await prisma.slide.update({ where: { id: slideId }, data: { imageStatus: "FAILED" } });
     const reason = error instanceof Error ? error.message : String(error);
-    console.warn(`Could not queue slide/regenerate-image for ${slide.id}:`, reason);
+    console.warn(`Could not queue slide/regenerate-image for ${slideId}:`, reason);
     res.status(502).json({ error: "Could not reach Inngest. Is the Inngest dev server running?" });
     return;
   }
 
-  res.status(202).json({ id: slide.id });
+  res.status(202).json({ id: slideId });
 });
 
 /** Capture feedback on a slide. Sent mid-presentation, so it must be cheap and never fail loudly. */
@@ -269,11 +297,26 @@ decksRouter.post("/:deckId/slides/:slideId/rewrite", async (req, res) => {
     return;
   }
 
-  // Mark first, so the UI shows the slide is being rewritten even before Inngest starts
-  await prisma.slide.update({
-    where: { id: req.params.slideId },
-    data: { textStatus: "REWRITING" },
-  });
+  let chargeId: string;
+
+  try {
+    const reserved = await reserveRewrite(req.userId, req.params.deckId, req.params.slideId);
+    if (!reserved.ok && reserved.reason === "missing") {
+      res.status(404).json({ error: "Note not found" });
+      return;
+    }
+    if (!reserved.ok) {
+      res.status(409).json({ error: "This slide is already being rewritten." });
+      return;
+    }
+    chargeId = reserved.chargeId;
+  } catch (error) {
+    if (error instanceof QuotaError) {
+      res.status(error.status).json({ error: error.message, code: error.code });
+      return;
+    }
+    throw error;
+  }
 
   try {
     await inngest.send({
@@ -281,6 +324,7 @@ decksRouter.post("/:deckId/slides/:slideId/rewrite", async (req, res) => {
       data: { deckId: req.params.deckId, slideId: req.params.slideId, noteId: note.id },
     });
   } catch (error) {
+    await refundCharge(chargeId);
     await prisma.slide.update({ where: { id: req.params.slideId }, data: { textStatus: "FAILED" } });
     const reason = error instanceof Error ? error.message : String(error);
     console.warn(`Could not queue slide/rewrite-text for ${req.params.slideId}:`, reason);

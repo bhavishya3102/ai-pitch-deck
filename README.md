@@ -17,7 +17,7 @@ idea → Inngest job → OpenAI agent (guardrails) → image per slide → Image
 | `frontend/` | React 19 + Vite, TanStack Query, Clerk |
 
 Features: live pipeline view, per-slide images, **edit any slide**, **re-illustrate a single slide**,
-**export to PPTX / PDF**, full-screen presenting with a highlighter, stop & delete a running
+**export to PPTX / PDF**, full-screen presenting with a highlighter and a laser pointer, stop & delete a running
 generation, and per-user decks behind sign-in.
 
 ## Setup
@@ -111,6 +111,27 @@ and `/api/decks` answers `503` with the reason. `/health` and the Inngest endpoi
 Decks created before auth existed were kept and marked `legacy-unclaimed` — they belong to no account
 and are invisible in the UI.
 
+## Quotas
+
+Every signed-in account has a spend cap, enforced before a job is queued. Two clicks at once share one
+lock, so they cannot both slip under the limit. The defaults are a free tier; set them in `backend/.env`.
+
+| Limit | Default | What it counts | Resets |
+|---|---|---|---|
+| Decks | 5 / month | each deck that was actually queued | 1st of the month, UTC |
+| Concurrent decks | 1 | decks still `PENDING` or `GENERATING` | when that deck finishes or is deleted |
+| Image regenerations | 30 / day | **Regenerate image** only — the pictures inside a new deck are part of the deck | midnight UTC |
+| Slide rewrites | 30 / day | **Apply with AI** | midnight UTC |
+
+A request over the limit returns `429` and creates nothing. If Inngest cannot be reached, the charge is
+removed and the deck is marked `FAILED`, same as before. Deleting a finished deck does not give the
+monthly deck back — the OpenAI call already ran. Deleting one that is still generating does free the
+concurrency slot.
+
+`GET /api/decks/quota` returns what is left. The composer and the signed-in landing page show it, and
+disable **Generate** only once that response says the next deck will be refused. If the quota request
+itself fails, the button stays available and the server still decides.
+
 ## Deck options
 
 The composer sets three things before the agent runs, and they are saved on the deck so a
@@ -179,7 +200,7 @@ While presenting:
 | `N` | opens a note box on the current slide. `Enter` saves, `Shift`+`Enter` adds a line, `Esc` cancels |
 | `M` | flags the slide without typing — one keypress, fill in the detail after the meeting |
 
-The note box owns the keyboard while it is open, so arrow keys, `H` and `F` can't fire mid-sentence and
+The note box owns the keyboard while it is open, so arrow keys, `H`, `L` and `F` can't fire mid-sentence and
 `Esc` closes the box rather than the presentation. Confirmation appears immediately rather than after the
 round trip, so nothing gets pressed twice in front of a room.
 
@@ -212,8 +233,9 @@ All deck routes need a Clerk session token and only ever touch the caller's own 
 
 | Method | Path | Purpose |
 |---|---|---|
-| `POST` | `/api/decks` | create a deck and queue the job — `{ idea, audience?, tone?, slideCount? }`, idea ≥ 20 characters |
+| `POST` | `/api/decks` | create a deck and queue the job — `{ idea, audience?, tone?, slideCount? }`, idea ≥ 20 characters. `429` when the monthly or concurrency quota is used up |
 | `GET` | `/api/decks` | list your decks |
+| `GET` | `/api/decks/quota` | decks, image regenerations and rewrites left on this account |
 | `GET` | `/api/decks/:id` | one deck with slides (the UI polls this) |
 | `DELETE` | `/api/decks/:id` | stop the run if any, then delete deck + slides |
 | `PATCH` | `/api/decks/:deckId/slides/:slideId` | edit title / content / image prompt |
@@ -235,6 +257,7 @@ Open a deck and press **Present**:
 | `→` / `Space` | next slide |
 | `←` | previous slide |
 | `H` | highlighter — dims everything except a circle around the cursor (scroll to resize) |
+| `L` | laser — a tight dot on the word under the cursor; the slide stays fully lit. Works together with the highlighter |
 | `F` | toggle full screen |
 | `N` | write a note on this slide |
 | `M` | flag this slide, no typing |
@@ -254,6 +277,8 @@ Open a deck and press **Present**:
 | Export says the deck has no slides | generation hasn't produced any slide yet (409) |
 | "Apply with AI" says nothing to apply | the note is still an empty flag — add the detail first (409) |
 | Deck creation returns 400 on `audience` / `tone` / `slideCount` | only the listed choices are accepted — see **Deck options** |
+| Deck creation returns 429 | the monthly deck quota or the one-at-a-time limit — see **Quotas**. Delete a deck stuck on Generating to free the slot; that does not refund the month |
+| `GET /api/decks/quota` returns 500 | the `UsageCharge` migration has not been applied — `npx prisma migrate deploy --config prisma7.config.ts` |
 | Deck came out one slide short or long | within the tolerance the schema allows; the header shows the real count |
 | Slide shows `couldn't rewrite this slide` | the rewrite failed; the old wording is kept, press Apply again |
 | Every DB query fails with `ETIMEDOUT` | the machine has no IPv6 route but the database host publishes AAAA records — `src/index.js` disables Node's address auto-selection for this |

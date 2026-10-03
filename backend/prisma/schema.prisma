@@ -49,6 +49,13 @@ enum DeckStatus {
   FAILED
 }
 
+/// A paid OpenAI call that was actually queued. Deleting the deck does not remove it.
+enum UsageKind {
+  DECK
+  IMAGE
+  REWRITE
+}
+
 model Deck {
   id           String     @id @default(cuid())
   /// Clerk user id — every deck belongs to exactly one signed-in user
@@ -67,6 +74,16 @@ model Deck {
   slides       Slide[]
 
   @@index([userId])
+}
+
+/// Spend record for one user. Kept separate from Deck so a delete cannot reset the quota.
+model UsageCharge {
+  id        String    @id @default(cuid())
+  userId    String
+  kind      UsageKind
+  createdAt DateTime  @default(now())
+
+  @@index([userId, kind, createdAt])
 }
 
 model Slide {

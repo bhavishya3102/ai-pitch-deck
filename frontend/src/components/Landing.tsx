@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState, type FormEvent } from "react";
 
-import { ApiError, useCreateDeck } from "../lib/api.ts";
+import { ApiError, useCreateDeck, useQuota } from "../lib/api.ts";
+import { deckQuotaBlocked, deckQuotaHint } from "../lib/quota-copy.ts";
 import { useScrollReveal } from "../lib/hooks.ts";
 import { savePendingIdea, takePendingIdea } from "../lib/pending-idea.ts";
 
@@ -79,9 +80,13 @@ export function Landing({ isSignedIn, onStart, onCreated, onSignIn }: Props) {
   // An idea typed before signing in comes back here after the redirect
   const [idea, setIdea] = useState(() => takePendingIdea() ?? "");
   const createDeck = useCreateDeck();
+  // Signed-out visitors never hit the API. A quota that is still loading does not block the button.
+  const quota = useQuota(isSignedIn);
+  const quotaBlocked = isSignedIn && deckQuotaBlocked(quota.data);
+  const quotaHint = isSignedIn ? deckQuotaHint(quota.data) : null;
 
   const length = idea.trim().length;
-  const ready = length >= MIN_LENGTH && !createDeck.isPending;
+  const ready = length >= MIN_LENGTH && !createDeck.isPending && !quotaBlocked;
 
   function submit(event: FormEvent) {
     event.preventDefault();
@@ -171,16 +176,18 @@ export function Landing({ isSignedIn, onStart, onCreated, onSignIn }: Props) {
             </div>
 
             <div className="hero-form-foot">
-              <span className="mono hero-hint" data-ok={length >= MIN_LENGTH}>
+              <span className="mono hero-hint" data-ok={length >= MIN_LENGTH && !quotaBlocked}>
                 {createDeck.isPending
                   ? "Queuing the job…"
-                  : length === 0
-                    ? "Press Enter to start"
-                    : length < MIN_LENGTH
-                      ? `${MIN_LENGTH - length} more characters`
-                      : isSignedIn
-                        ? "Ready — press Enter"
-                        : "Ready — you'll sign in next"}
+                  : quotaBlocked && quotaHint
+                    ? quotaHint
+                    : length === 0
+                      ? "Press Enter to start"
+                      : length < MIN_LENGTH
+                        ? `${MIN_LENGTH - length} more characters`
+                        : isSignedIn
+                          ? quotaHint ?? "Ready — press Enter"
+                          : "Ready — you'll sign in next"}
               </span>
               <span className="mono muted hero-cost">Free to try · nothing to install</span>
             </div>

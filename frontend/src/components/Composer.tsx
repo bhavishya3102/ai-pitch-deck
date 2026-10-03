@@ -1,7 +1,8 @@
 import { useState, type FormEvent, type KeyboardEvent } from "react";
 
-import { ApiError, useCreateDeck } from "../lib/api.ts";
+import { ApiError, useCreateDeck, useQuota } from "../lib/api.ts";
 import { AUDIENCE_OPTIONS, SLIDE_COUNT_OPTIONS, TONE_OPTIONS } from "../lib/deck-options.ts";
+import { deckQuotaBlocked, deckQuotaHint } from "../lib/quota-copy.ts";
 import { takePendingIdea } from "../lib/pending-idea.ts";
 import type { DeckAudience, DeckTone } from "../lib/types.ts";
 
@@ -54,9 +55,12 @@ export function Composer({ onCreated }: { onCreated: (id: string) => void }) {
   const [tone, setTone] = useState<DeckTone>("CONFIDENT");
   const [slideCount, setSlideCount] = useState<number>(7);
   const createDeck = useCreateDeck();
+  const quota = useQuota();
+  const quotaBlocked = deckQuotaBlocked(quota.data);
+  const quotaHint = deckQuotaHint(quota.data);
 
   const length = idea.trim().length;
-  const ready = length >= MIN_LENGTH && !createDeck.isPending;
+  const ready = length >= MIN_LENGTH && !createDeck.isPending && !quotaBlocked;
 
   function submit() {
     if (!ready) return;
@@ -118,8 +122,10 @@ export function Composer({ onCreated }: { onCreated: (id: string) => void }) {
         />
       </div>
 
+      {quotaHint && <p className="quota-line mono muted">{quotaHint}</p>}
+
       <div className="composer-footer">
-        <span className="mono muted" data-ok={length >= MIN_LENGTH}>
+        <span className="mono muted" data-ok={length >= MIN_LENGTH && !quotaBlocked}>
           {length < MIN_LENGTH ? `${MIN_LENGTH - length} more characters` : "⌘/Ctrl + Enter"}
         </span>
         <button type="submit" className="button-primary" disabled={!ready}>
