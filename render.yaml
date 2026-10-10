@@ -41,7 +41,7 @@ services:
       - key: IMAGEKIT_URL_ENDPOINT
         sync: false
       - key: USE_PLACEHOLDER_IMAGES
-        value: "false"
+        value: "true"
       - key: QUOTA_DECKS_PER_MONTH
         value: "5"
       - key: QUOTA_MAX_CONCURRENT_DECKS
