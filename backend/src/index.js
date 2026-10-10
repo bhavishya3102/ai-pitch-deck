@@ -1,6 +1,7 @@
 import "dotenv/config";
 import { setDefaultAutoSelectFamily } from "node:net";
 
+import cors from "cors";
 import express from "express";
 import { serve } from "inngest/express";
 
@@ -17,6 +18,24 @@ setDefaultAutoSelectFamily(false);
 const functions = [generateDeck, regenerateSlideImage, rewriteSlideText];
 
 const app = express();
+
+// In production the frontend is served from Vercel and the API from Render, so
+// every call is cross-origin. Comma-separated list of allowed origins; unset
+// means no CORS headers, which is right for local dev (the Vite proxy makes the
+// browser see one origin).
+const allowedOrigins = (process.env.FRONTEND_ORIGIN ?? "")
+  .split(",")
+  .map((origin) => origin.trim())
+  .filter(Boolean);
+
+app.use(
+  cors({
+    origin: allowedOrigins.length > 0 ? allowedOrigins : false,
+    // The pptx/pdf download reads its filename off this header, and a browser
+    // hides every non-safelisted header cross-origin unless it is exposed
+    exposedHeaders: ["Content-Disposition"],
+  }),
+);
 
 app.use(express.json());
 

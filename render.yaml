@@ -1,0 +1,52 @@
+# Render Blueprint — backend/ deploys as one Node web service.
+# Secrets are marked `sync: false`: Render asks for them on first deploy and
+# keeps them out of the repo.
+services:
+  - type: web
+    name: ai-pitch-deck-api
+    runtime: node
+    plan: free
+    rootDir: backend
+    # postinstall runs `prisma generate` (the client is gitignored), then the
+    # migrations are applied before the new version starts taking traffic
+    buildCommand: npm ci && npx prisma migrate deploy
+    startCommand: npm start
+    healthCheckPath: /health
+    envVars:
+      # Render injects PORT itself — src/index.js reads it
+      - key: NODE_ENV
+        value: production
+      # Comma-separated Vercel origins allowed to call this API (no trailing slash)
+      - key: FRONTEND_ORIGIN
+        sync: false
+      - key: DATABASE_URL
+        sync: false
+      - key: CLERK_PUBLISHABLE_KEY
+        sync: false
+      - key: CLERK_SECRET_KEY
+        sync: false
+      # From Inngest Cloud → Manage → Event keys / Signing key.
+      # INNGEST_DEV is deliberately absent: setting it would point the SDK at a
+      # local dev server instead of Inngest Cloud.
+      - key: INNGEST_EVENT_KEY
+        sync: false
+      - key: INNGEST_SIGNING_KEY
+        sync: false
+      - key: OPENAI_API_KEY
+        sync: false
+      - key: IMAGEKIT_PRIVATE_KEY
+        sync: false
+      - key: IMAGEKIT_PUBLIC_KEY
+        sync: false
+      - key: IMAGEKIT_URL_ENDPOINT
+        sync: false
+      - key: USE_PLACEHOLDER_IMAGES
+        value: "false"
+      - key: QUOTA_DECKS_PER_MONTH
+        value: "5"
+      - key: QUOTA_MAX_CONCURRENT_DECKS
+        value: "1"
+      - key: QUOTA_IMAGES_PER_DAY
+        value: "30"
+      - key: QUOTA_REWRITES_PER_DAY
+        value: "30"

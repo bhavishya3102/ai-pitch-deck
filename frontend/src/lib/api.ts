@@ -11,6 +11,17 @@ import {
   type SlideNote,
 } from "./types.ts";
 
+/**
+ * In production the API lives on its own origin (Render), so calls need the
+ * absolute URL. Unset — local dev — keeps the path relative and the Vite proxy
+ * forwards it to port 4000.
+ */
+const API_BASE = (import.meta.env.VITE_API_URL ?? "").replace(/\/$/, "");
+
+function apiUrl(path: string): string {
+  return `${API_BASE}${path}`;
+}
+
 export class ApiError extends Error {
   readonly status: number;
   readonly body: { error?: string; id?: string } | null;
@@ -26,7 +37,7 @@ export class ApiError extends Error {
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
   let response: Response;
   try {
-    response = await fetch(path, {
+    response = await fetch(apiUrl(path), {
       ...init,
       // Clerk session token — the API scopes every deck to this user
       headers: { "Content-Type": "application/json", ...(await authHeader()), ...init?.headers },
@@ -282,7 +293,7 @@ function filenameFrom(header: string | null, fallback: string): string {
 export function useExportDeck(deckId: string) {
   return useMutation({
     mutationFn: async (format: "pptx" | "pdf") => {
-      const response = await fetch(`/api/decks/${deckId}/export?format=${format}`, {
+      const response = await fetch(apiUrl(`/api/decks/${deckId}/export?format=${format}`), {
         headers: await authHeader(),
       });
 

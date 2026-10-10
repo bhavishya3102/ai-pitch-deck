@@ -12,6 +12,9 @@
     "test": "node --experimental-strip-types --test src/lib/quota-policy.test.ts",
     "postinstall": "prisma generate"
   },
+  "engines": {
+    "node": ">=22.18"
+  },
   "keywords": [],
   "type": "module",
   "author": "",
@@ -23,6 +26,7 @@
     "@pinecone-database/pinecone": "^9.0.0",
     "@prisma/adapter-pg": "^7.10.0",
     "@prisma/client": "^7.10.0",
+    "cors": "^2.8.6",
     "dotenv": "^17.4.2",
     "express": "^5.2.1",
     "inngest": "^4.20.0",
